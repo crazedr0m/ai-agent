@@ -1,5 +1,5 @@
 # project_code.py
 
-def add_numbers(a, b):
-    # Логическая ошибка: тут минус вместо плюса!
-    return a - b 
+def calculate_total_price(price, tax_rate):
+    """Вычисляет итоговую стоимость с учетом налога."""
+    return price + (price * tax_rate)
