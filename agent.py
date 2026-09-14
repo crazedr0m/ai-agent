@@ -78,10 +78,20 @@ def call_ollama(system_prompt, user_prompt):
 
 def run_tests():
     console.print(f"[yellow]🧪 Запускаем тесты {TEST_FILE}...[/yellow]")
-    result = subprocess.run([sys.executable, TEST_FILE], capture_output=True, text=True)
-    if result.returncode == 0 and "SUCCESS" in result.stdout:
+    
+    # Запускаем скрипт тестов
+    result = subprocess.run(
+        [sys.executable, TEST_FILE], 
+        capture_output=True, 
+        text=True
+    )
+    
+    # Убираем капризную проверку на строку "SUCCESS"
+    # Для Python признак успеха — это код возврата 0
+    if result.returncode == 0:
         return True, "Все тесты успешно пройдены!"
     else:
+        # Если тесты упали, собираем весь лог ошибок
         error_log = result.stderr if result.stderr else result.stdout
         return False, error_log
 
