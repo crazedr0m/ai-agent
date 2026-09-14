@@ -1,0 +1,21 @@
+{
+  "legacy_project_path": "./legacy_src",
+  "target_project_path": "./modern_src",
+  "strategy": "new_directory", 
+  "target_stack": {
+    "language": "Python 3.11+",
+    "framework": "FastAPI",
+    "database_orm": "SQLAlchemy v2.0 (Async)",
+    "validation": "Pydantic v2"
+  },
+  "constraints": [
+    "Строго сохранять обратную совместимость всех REST API эндпоинтов (схема запросов и ответов).",
+    "НЕ изменять существующую схему таблиц в базе данных.",
+    "Весь новый код должен быть строго асинхронным (async/await).",
+    "Покрытие кода тестами (pytest) должно быть не менее 80%."
+  ],
+  "human_interaction": {
+    "ask_on_ambiguity": true,
+    "ask_before_code_rewrite": false
+  }
+}
