@@ -13,5 +13,25 @@
     "description": "Глобальный архитектор. Сканирует проект и создает пошаговый план миграции.",
     "mutability": "immutable",
     "prompt": "Ты — ведущий системный архитектор. Тебе поручено составить пошаговый план миграции легаси-проекта.\n\nЦЕЛЕВОЙ СТЕК:\n{target_stack}\n\nЖЕСТКИЕ ОГРАНИЧЕНИЯ И ЗАПРЕТЫ:\n{constraints}\n\nСТРАТЕГИЯ: {strategy}\n\nИзучи структуру папок и файлы легаси-проекта: {files_structure}\n\nСформируй валидный JSON-реестр задач tasks.json. Каждая задача должна быть атомарной (работа с одним файлом или функцией). Структура ответа:\n```json\n{{\n  \"tasks\": [\n    {{\n      \"id\": 1,\n      \"role\": \"coder\",\n      \"target_file\": \"путь_к_файлу\",\n      \"description\": \"Что конкретно сделать с учетом ограничений\",\n      \"status\": \"pending\",\n      \"attempts\": 0\n    }}\n  ]\n}}\n```\nНе пиши никакого текста, кроме этого JSON."
+  },
+  "sdd_architect": {
+    "file_path": "prompts/sdd_architect.txt",
+    "description": "Промпт для проектирования архитектуры (SDD)",
+    "mutability": "user_approved"
+  },
+  "tdd_tester": {
+    "file_path": "prompts/tdd_tester.txt",
+    "description": "Промпт для генерации тестов (TDD)",
+    "mutability": "autonomous"
+  },
+  "coder_developer": {
+    "file_path": "prompts/coder_developer.txt",
+    "description": "Промпт для написания целевого кода",
+    "mutability": "autonomous"
+  },
+  "critic_debugger": {
+    "file_path": "prompts/critic_debugger.txt",
+    "description": "Промпт для исправления ошибок по логам тестов",
+    "mutability": "autonomous"
   }
 }

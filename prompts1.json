@@ -1,0 +1,42 @@
+{
+  "role_tester_legacy": {
+    "file_path": "prompts/role_tester_legacy.txt",
+    "description": "Инструкция для создания unit-тестов под легаси-код (из ранних версий)",
+    "mutability": "autonomous"
+  },
+  "role_critic_optimizer": {
+    "file_path": "prompts/role_critic_optimizer.txt",
+    "description": "Мета-анализатор промптов. Исправляет инструкции кодеров при системных сбоях",
+    "mutability": "user_approved"
+  },
+  "role_critic_optimizer_user": {
+    "file_path": "prompts/role_critic_optimizer_user.txt",
+    "description": "Запрос к мета-анализатору (User Prompt) с описанием сбоя кодера",
+    "mutability": "autonomous"
+  },
+  "role_global_architect": {
+    "file_path": "prompts/role_global_architect.txt",
+    "description": "Глобальный архитектор. Сканирует проект и создает план миграции tasks.json",
+    "mutability": "immutable"
+  },
+  "sdd_architect": {
+    "file_path": "prompts/sdd_architect.txt",
+    "description": "Промпт для проектирования архитектуры (SDD)",
+    "mutability": "user_approved"
+  },
+  "tdd_tester": {
+    "file_path": "prompts/tdd_tester.txt",
+    "description": "Промпт для генерации тестов (TDD)",
+    "mutability": "autonomous"
+  },
+  "coder_developer": {
+    "file_path": "prompts/coder_developer.txt",
+    "description": "Промпт для написания целевого кода",
+    "mutability": "autonomous"
+  },
+  "critic_debugger": {
+    "file_path": "prompts/critic_debugger.txt",
+    "description": "Промпт для исправления ошибок по логам тестов",
+    "mutability": "autonomous"
+  }
+}

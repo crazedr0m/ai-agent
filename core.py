@@ -18,6 +18,45 @@ ANALYZER_MODEL = "qwen2.5-coder:14b"
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from modules.parser import extract_code_from_markdown
 
+# Дописать в core.py
+import re
+from core_tools import TOOLS_MAP
+
+def execute_model_tools(model_response: str) -> tuple[bool, str]:
+    """
+    Ищет теги <call name="...">...</call> в ответе модели.
+    Если находит, выполняет встроенную функцию и возвращает (True, "Результат работы инструмента").
+    Если инструментов не вызвано, возвращает (False, "").
+    """
+    # Ищем паттерн <call name="tool_name">arguments</call>
+    match = re.search(r'<call name="(\w+)">(.*?)</call>', model_response, re.DOTALL)
+    
+    if not match:
+        return False, ""
+        
+    tool_name = match.group(1)
+    raw_args = match.group(2).strip()
+    
+    if tool_name not in TOOLS_MAP:
+        return True, f"Ошибка: Инструмент '{tool_name}' не зарегистрирован в ядре."
+        
+    console.print(f"[bold cyan]🔧 Ядро перехватило вызов инструмента: {tool_name}({raw_args})[/bold cyan]")
+    
+    # Парсим аргументы (если их несколько, например через запятую, или один)
+    try:
+        if "," in raw_args and tool_name == "read_file_chunk":
+            # Специфика для чтения кусков: путь, старт, энд
+            parts = [p.strip() for p in raw_args.split(",")]
+            result = TOOLS_MAP[tool_name](parts[0], int(parts[1]), int(parts[2]))
+        else:
+            # Для простых команд типа list_dir или view_file_outline, где нужен только путь
+            result = TOOLS_MAP[tool_name](raw_args)
+            
+        return True, f"\n<tool_result name=\"{tool_name}\">\n{result}\n</tool_result>\n"
+    except Exception as e:
+        return True, f"Системный сбой при выполнении инструмента: {e}"
+
+
 def load_prompt(role_key: str) -> str:
     """Безопасно загружает промпт из внешнего JSON-файла."""
     with open("prompts.json", "r", encoding="utf-8") as f:
