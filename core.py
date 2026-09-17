@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # core.py
 # НЕИЗМЕНЯЕМОЕ ЯДРО СИСТЕМЫ. ИИ не имеет права менять этот файл.
 
@@ -58,30 +59,66 @@ def execute_model_tools(model_response: str) -> tuple[bool, str]:
 
 
 def load_prompt(role_key: str) -> str:
-    """Безопасно загружает промпт из внешнего JSON-файла."""
+    """Безопасно загружает промпт: из file_path или inline prompt."""
     with open("prompts.json", "r", encoding="utf-8") as f:
         data = json.load(f)
-    return data[role_key]["prompt"]
+    entry = data[role_key]
+    if "file_path" in entry:
+        with open(entry["file_path"], "r", encoding="utf-8") as pf:
+            return pf.read()
+    return entry["prompt"]
 
 def update_prompt_file(role_key: str, new_prompt_text: str):
-    """Обновляет изменяемый промпт в prompts.json."""
+    """Обновляет изменяемый промпт: в файле (file_path) или inline в prompts.json."""
     with open("prompts.json", "r", encoding="utf-8") as f:
         data = json.load(f)
+    entry = data[role_key]
     
-    if data[role_key]["mutability"] == "immutable":
+    if entry.get("mutability") == "immutable":
         console.print(f"[red]🚫 Попытка изменить защищенный промпт {role_key} заблокирована ядром![/red]")
         return False
-        
-    data[role_key]["prompt"] = new_prompt_text
-    with open("prompts.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    console.print(f"[green]🧠 База знаний обновлена! Промпт [{role_key}] успешно модифицирован.[/green]")
+    
+    if "file_path" in entry:
+        # Запись через file_path — пишем в файл на диске
+        with open(entry["file_path"], "w", encoding="utf-8") as pf:
+            pf.write(new_prompt_text)
+        console.print(f"[green]🧠 База знаний обновлена! Файл [{entry['file_path']}] успешно модифицирован.[/green]")
+    else:
+        # Запись через inline prompt — пишем в JSON
+        entry["prompt"] = new_prompt_text
+        with open("prompts.json", "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        console.print(f"[green]🧠 База знаний обновлена! Промпт [{role_key}] успешно модифицирован.[/green]")
     return True
 
-def call_ollama(system_prompt: str, user_prompt: str) -> str:
+def load_prompt_from_file(role_key: str) -> str:
+    """Загружает промпт: из файла (file_path) или inline (prompt)."""
+    with open("prompts.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+    entry = data[role_key]
+    if "file_path" in entry:
+        with open(entry["file_path"], "r", encoding="utf-8") as pf:
+            return pf.read()
+    return entry["prompt"]
+
+def update_prompt_in_file(role_key: str, new_text: str) -> bool:
+    """Обновляет файл промпта с проверкой mutability (аналог update_prompt_file, но для file_path)."""
+    with open("prompts.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+    entry = data[role_key]
+    if entry.get("mutability") == "immutable":
+        console.print(f"[red]🚫 Попытка изменить защищенный промпт {role_key} заблокирована ядром![/red]")
+        return False
+    file_path = entry.get("file_path", f"prompts/{role_key}.txt")
+    with open(file_path, "w", encoding="utf-8") as pf:
+        pf.write(new_text)
+    console.print(f"[green]🧠 База знаний обновлена! Файл [{file_path}] успешно модифицирован.[/green]")
+    return True
+
+def call_ollama(system_prompt: str, user_prompt: str, model_override: str = None) -> str:
     """Стандартизированный метод отправки запросов в Ollama."""
     payload = {
-        "model": ANALYZER_MODEL,
+        "model": model_override or ANALYZER_MODEL,
         "prompt": f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n",
         "stream": False,
         "options": {"temperature": 0.2}

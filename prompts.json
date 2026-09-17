@@ -1,18 +1,23 @@
 {
   "role_tester": {
+    "file_path": "prompts/role_tester.txt",
     "description": "Инструкция для создания unit-тестов под легаси-код.",
-    "mutability": "autonomous",
-    "prompt": "Ты — эксперт по тестированию в Python. Напиши unit-тесты для предоставленного кода. Тесты должны использовать стандартный модуль unittest и запускаться напрямую. ОБЯЗАТЕЛЬНО импортируй тестируемые функции из файла project_code (from project_code import ...). Не пиши никаких пояснений вне блока markdown с кодом."
+    "mutability": "autonomous"
   },
   "role_critic_optimizer": {
+    "file_path": "prompts/role_critic_optimizer.txt",
     "description": "Мета-анализатор промптов. Исправляет инструкции кодеров при системных сбоях.",
-    "mutability": "user_approved",
-    "prompt": "Ты — инженер промптов. Предыдущий системный промпт привел к ошибке в работе локальной модели Ollama. Изучи ошибку и текущий промпт. Выдай обновленный, более жесткий текст промпта, который исключит эту ошибку. Верни ТОЛЬКО текст нового промпта, без комментариев."
+    "mutability": "user_approved"
   },
-    "role_global_architect": {
+  "role_global_architect": {
+    "file_path": "prompts/role_global_architect.txt",
     "description": "Глобальный архитектор. Сканирует проект и создает пошаговый план миграции.",
-    "mutability": "immutable",
-    "prompt": "Ты — ведущий системный архитектор. Тебе поручено составить пошаговый план миграции легаси-проекта.\n\nЦЕЛЕВОЙ СТЕК:\n{target_stack}\n\nЖЕСТКИЕ ОГРАНИЧЕНИЯ И ЗАПРЕТЫ:\n{constraints}\n\nСТРАТЕГИЯ: {strategy}\n\nИзучи структуру папок и файлы легаси-проекта: {files_structure}\n\nСформируй валидный JSON-реестр задач tasks.json. Каждая задача должна быть атомарной (работа с одним файлом или функцией). Структура ответа:\n```json\n{{\n  \"tasks\": [\n    {{\n      \"id\": 1,\n      \"role\": \"coder\",\n      \"target_file\": \"путь_к_файлу\",\n      \"description\": \"Что конкретно сделать с учетом ограничений\",\n      \"status\": \"pending\",\n      \"attempts\": 0\n    }}\n  ]\n}}\n```\nНе пиши никакого текста, кроме этого JSON."
+    "mutability": "immutable"
+  },
+  "role_global_architect1": {
+    "file_path": "prompts/role_global_architect1.txt",
+    "description": "Глобальный архитектор с поддержкой инструментов (ReAct: list_dir, view_file_outline, read_file_chunk, query_db_schema).",
+    "mutability": "immutable"
   },
   "sdd_architect": {
     "file_path": "prompts/sdd_architect.txt",
@@ -32,6 +37,26 @@
   "critic_debugger": {
     "file_path": "prompts/critic_debugger.txt",
     "description": "Промпт для исправления ошибок по логам тестов",
+    "mutability": "autonomous"
+  },
+  "role_critic_optimizer_user": {
+    "file_path": "prompts/role_critic_optimizer_user.txt",
+    "description": "Запрос к мета-анализатору (User Prompt) с описанием сбоя кодера",
+    "mutability": "autonomous"
+  },
+  "role_tester_legacy": {
+    "file_path": "prompts/role_tester_legacy.txt",
+    "description": "Инструкция для создания unit-тестов под легаси-код (из ранних версий)",
+    "mutability": "autonomous"
+  },
+  "meta_recovery_system": {
+    "file_path": "prompts/meta_recovery_system.txt",
+    "description": "Системный промпт Meta-Optimizer для самовосстановления конвейера (initializer)",
+    "mutability": "autonomous"
+  },
+  "meta_recovery_user": {
+    "file_path": "prompts/meta_recovery_user.txt",
+    "description": "User prompt для Meta-Optimizer: контекст ошибки initializer",
     "mutability": "autonomous"
   }
 }

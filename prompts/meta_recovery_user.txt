@@ -1,0 +1,21 @@
+Системная ошибка при инициализации конвейера миграции.
+
+Шаг: {step}
+Ошибка: {error}
+
+--- Ответ модели (первые 2000 симв.) ---
+{raw_response}
+
+--- Код парсера (modules/parser.py) ---
+{parser_code}
+
+--- Промпт архитектора (role_global_architect1.txt) ---
+{architect_prompt}
+
+Проанализируй и верни JSON:
+{{
+  "root_cause": "краткое описание",
+  "fix_type": "code" | "prompt" | "none",
+  "target_file": "modules/parser.py" | "prompts/role_global_architect1.txt" | "",
+  "new_content": "полный новый код файла ИЛИ пустая строка, если fix_type=none"
+}}

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # modules/executor.py
 import os
 import json
@@ -97,18 +98,22 @@ def execute_task(task: dict, manifest: dict):
     # ------------------------------------------------------------------
     core.console.print(f"[red]❌ Предел попыток исправления кода исчерпан. Запускаем рефлексию над промптом...[/red]")
     
-    # Вызываем мета-оптимизатор (промпт которого мы заложили в prompts.json на Шаге 1 предыдущего этапа)
-    meta_optimizer_prompt = core.load_prompt("role_critic_optimizer")
+    # 1. Загружаем СИСТЕМНЫЙ промпт Мета-Оптимизатора
+    meta_optimizer_system = core.load_prompt_from_file("role_critic_optimizer")
+    
+    # 2. Загружаем текущий промпт Кодера
     current_coder_prompt_text = core.load_prompt_from_file("coder_developer")
     
-    reflector_user_prompt = (
-        f"Текущий системный промпт Кодера:\n{current_coder_prompt_text}\n\n"
-        f"Код, который он пишет стабильно с ошибкой:\n{target_code}\n\n"
-        f"Лог ошибки тестов:\n{test_log}\n\n"
-        "Какое жесткое системное правило нужно добавить в промпт Кодера, чтобы он не совершал эту ошибку? Выдай обновленный текст промпта целиком."
+    # 3. Загружаем ШАБЛОН ЗАПРОСА (User Prompt) Мета-Оптимизатора и подставляем данные
+    meta_optimizer_user_template = core.load_prompt_from_file("role_critic_optimizer_user")
+    reflector_user_prompt = meta_optimizer_user_template.format(
+        current_coder_prompt=current_coder_prompt_text,
+        target_code=target_code,
+        test_log=test_log
     )
     
-    suggested_new_prompt = core.call_ollama(meta_optimizer_prompt, reflector_user_prompt, model_override="deepseek-r1:32b")
+    # Вызываем тяжелую рассуждающую модель для генерации нового промпта
+    suggested_new_prompt = core.call_ollama(meta_optimizer_system, reflector_user_prompt, model_override="deepseek-r1:32b")
     
     # Ядро решает, записывать ли новый промпт в файл prompts/coder_developer.txt (спросит разрешения, так как там user_approved/autonomous)
     if core.update_prompt_in_file("coder_developer", suggested_new_prompt):

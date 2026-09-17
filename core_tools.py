@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # core_tools.py
 import os
 import sqlite3 # или psycopg2 / sqlalchemy в зависимости от БД
