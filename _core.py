@@ -19,9 +19,12 @@ ANALYZER_MODEL = "qwen2.5-coder:14b"
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from modules.parser import extract_code_from_markdown
 
-# Дописать в core.py
 import re
-from core_tools import TOOLS_MAP
+
+# Корневой core.py не импортирует core.core_tools напрямую,
+# чтобы избежать циклического импорта (__init__.py ещё грузится).
+# _GLOBAL_REGISTRY доступен через import core_tools (корневой файл)
+# или через core._GLOBAL_REGISTRY (после полной загрузки пакета)
 
 def execute_model_tools(model_response: str) -> tuple[bool, str]:
     """
@@ -38,20 +41,21 @@ def execute_model_tools(model_response: str) -> tuple[bool, str]:
     tool_name = match.group(1)
     raw_args = match.group(2).strip()
     
-    if tool_name not in TOOLS_MAP:
+    # Ленивый импорт — core_tools загружается после core/ пакета
+    from core.core_tools import _GLOBAL_REGISTRY, get_tool
+    
+    if tool_name not in _GLOBAL_REGISTRY:
         return True, f"Ошибка: Инструмент '{tool_name}' не зарегистрирован в ядре."
         
     console.print(f"[bold cyan]🔧 Ядро перехватило вызов инструмента: {tool_name}({raw_args})[/bold cyan]")
     
-    # Парсим аргументы (если их несколько, например через запятую, или один)
+    tool_func = get_tool(tool_name)
     try:
         if "," in raw_args and tool_name == "read_file_chunk":
-            # Специфика для чтения кусков: путь, старт, энд
-            parts = [p.strip() for p in raw_args.split(",")]
-            result = TOOLS_MAP[tool_name](parts[0], int(parts[1]), int(parts[2]))
+            parts = [p.strip() for p in raw_args.split(",", 2)]
+            result = tool_func(parts[0], int(parts[1]), int(parts[2]))
         else:
-            # Для простых команд типа list_dir или view_file_outline, где нужен только путь
-            result = TOOLS_MAP[tool_name](raw_args)
+            result = tool_func(raw_args)
             
         return True, f"\n<tool_result name=\"{tool_name}\">\n{result}\n</tool_result>\n"
     except Exception as e:
