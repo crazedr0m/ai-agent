@@ -43,3 +43,17 @@ manifest.json → Global Architect (создаёт tasks.json)
 - `immutable` — запрещено менять
 - `user_approved` — требует подтверждения человека (y/n)
 - `autonomous` — агент может менять самостоятельно
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (repo: `crazedr0m/ai-agent`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles are used with their default names. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout. See `docs/agents/domain.md`.

@@ -2,3 +2,6 @@ venv
 __pycache__
 .roo
 legacy_src
+modern_src
+tasks.json
+.env
