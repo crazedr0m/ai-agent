@@ -19,6 +19,22 @@ This file provides guidance to agents when working with code in this repository.
 - Обработка исключений через `return_exceptions=True`
 - Промпты и LLM вызовы асинхронизируются через `asyncio.to_thread()`
 
+### Улучшение №3: Shared context между этапами конвейера ✅ (NEW!)
+- Каждый этап (SDD → TDD → Coding) сохраняет данные в `shared_context.json`
+- SDD документ передаётся в TDD, а затем в Coding
+- Тесты передаются из TDD в Coding
+- Critic и Meta-Optimizer получают полный контекст всех предыдущих шагов
+- Глобальный счётчик выполненных задач для мониторинга прогресса
+
+### Улучшение №4: Система восстановления после ошибок ✅ (NEW!)
+- Реализован `RetrySystem` в [`agents/retry_system.py`](agents/retry_system.py)
+- Стратегия эскалации:
+  - **Retry**: до 3 попыток с задержкой
+  - **Escalation Level 1**: повышение приоритета задачи
+  - **Escalation Level 2**: Critic review (анализ ошибки)
+  - **Escalation Level 3**: Meta-Optimizer (переписывание промптов + hot reload)
+- Интеграция через `execute_task_with_retry()`
+
 ## 🚫 Критические правила (нарушение = поломка системы)
 
 - [`core.py`](core.py) и [`core_tools.py`](core_tools.py) — **IMMUTABLE**. Агент не имеет права их изменять.
@@ -46,6 +62,7 @@ manifest.json → Global Architect (создаёт tasks.json)
             → Тупик → Meta-Optimizer → перезапись prompts/ → Hot Reload
 
 🔄 Параллельное выполнение: все pending задачи выполняются одновременно через asyncio.gather()
+🔄 Retry с эскалацией: при ошибке задача проходит retry → escalation pipeline
 ```
 
 ## 📦 Зависимости

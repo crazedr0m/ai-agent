@@ -10,6 +10,7 @@ import os
 import json
 import sys
 import asyncio
+from datetime import datetime
 import core
 from core import BaseAgent
 from modules.parser import extract_code_from_markdown
@@ -228,7 +229,11 @@ class MigrationAgent(BaseAgent):
                     json.dump(plan, f, indent=2, ensure_ascii=False)
 
     def _execute_single_task(self, task: dict) -> bool:
-        """Выполняет одну задачу: SDD → TDD → Coding → Tests → Critic."""
+        """Выполняет одну задачу: SDD → TDD → Coding → Tests → Critic.
+        
+        ✅ Улучшение №3: Shared context между этапами конвейера
+        Все данные сохраняются в shared_context.json и передаются между шагами.
+        """
         task_id = task["id"]
         target_file = task["target_file"]
         core.console.print(f"\n[bold cyan]🎬 [Task #{task_id}] {target_file}[/bold cyan]")
@@ -236,6 +241,29 @@ class MigrationAgent(BaseAgent):
         manifest = self.manifest
         stack_str = json.dumps(manifest["target_stack"], ensure_ascii=False, indent=2)
         constraints_str = "\n- ".join(manifest["constraints"])
+
+        # ── Загрузка shared context ──
+        if os.path.exists(self.shared_context_path):
+            with open(self.shared_context_path, "r", encoding="utf-8") as f:
+                shared_ctx = json.load(f)
+        else:
+            shared_ctx = {
+                "version": "1.0",
+                "tasks": [],
+                "global_context": {
+                    "project_name": manifest.get("project_name", ""),
+                    "target_stack": manifest.get("target_stack", []),
+                    "constraints": manifest.get("constraints", [])
+                },
+                "shared_state": {
+                    "sdd_documents": {},
+                    "test_code": {},
+                    "implementation_code": {},
+                    "validation_results": {},
+                    "iteration_count": 0,
+                    "total_tasks_completed": 0
+                }
+            }
 
         # ── SDD ──
         core.console.print("[yellow]📐 SDD...[/yellow]")
@@ -245,63 +273,123 @@ class MigrationAgent(BaseAgent):
         sdd_doc = self.call_llm(sdd_system, sdd_user, model_override=self.model_architect)
         self.tracer.log_llm_call(sdd_doc[:300], model=self.model_architect)
 
+        # ✅ Сохраняем SDD в shared context
+        shared_ctx["shared_state"]["sdd_documents"][task_id] = {
+            "document": sdd_doc,
+            "iteration": 1,
+            "timestamp": datetime.now().isoformat()
+        }
+
         # ── TDD ──
         core.console.print("[yellow]🧪 TDD...[/yellow]")
         test_file = f"test_{os.path.basename(target_file)}"
         tdd_template = self.load_prompt("tdd_tester")
-        test_system = tdd_template.format(sdd_document=sdd_doc)
+        
+        # ✅ Передаём SDD из shared context в промпт TDD
+        sdd_doc_for_tdd = shared_ctx["shared_state"]["sdd_documents"].get(task_id, {}).get("document", sdd_doc)
+        test_system = tdd_template.format(sdd_document=sdd_doc_for_tdd)
         raw_test = self.call_llm(test_system, "Сгенерируй тесты.")
         test_code = extract_code_from_markdown(raw_test)
+        
+        # ✅ Сохраняем тесты в shared context
         with open(test_file, "w", encoding="utf-8") as f:
             f.write(test_code)
+        
+        shared_ctx["shared_state"]["test_code"][task_id] = {
+            "code": test_code,
+            "file": test_file,
+            "timestamp": datetime.now().isoformat()
+        }
 
         # ── Coding ──
         core.console.print("[yellow]💻 Coding...[/yellow]")
         coder_template = self.load_prompt("coder_developer")
+        
+        # ✅ Передаём SDD и тесты из shared context в промпт Coding
+        sdd_doc_for_coding = shared_ctx["shared_state"]["sdd_documents"].get(task_id, {}).get("document", sdd_doc)
+        test_code_for_coding = shared_ctx["shared_state"]["test_code"].get(task_id, {}).get("code", test_code)
+        
         coder_system = coder_template.format(
-            sdd_document=sdd_doc,
-            test_code=test_code,
+            sdd_document=sdd_doc_for_coding,
+            test_code=test_code_for_coding,
             constraints_info=constraints_str
         )
         raw_code = self.call_llm(coder_system, "Напиши код реализации.")
         target_code = extract_code_from_markdown(raw_code)
+        
+        # ✅ Сохраняем реализацию в shared context
         os.makedirs(os.path.dirname(target_file), exist_ok=True)
         with open(target_file, "w", encoding="utf-8") as f:
             f.write(target_code)
+        
+        shared_ctx["shared_state"]["implementation_code"][task_id] = {
+            "code": target_code,
+            "file": target_file,
+            "timestamp": datetime.now().isoformat()
+        }
 
         # ── Validation + Critic ──
         for attempt in range(MAX_FIX_ATTEMPTS):
             success, test_log = core.run_isolated_tests(test_file)
+            
+            # ✅ Сохраняем результаты валидации в shared context
+            shared_ctx["shared_state"]["validation_results"][task_id] = {
+                "attempt": attempt + 1,
+                "success": success,
+                "test_log": test_log if not success else None,
+                "timestamp": datetime.now().isoformat()
+            }
+
             if success:
                 core.console.print(f"[bold green]🎉 Задача #{task_id} выполнена![/bold green]")
                 self._update_task_status(task_id, "completed")
+                
+                # ✅ Обновляем глобальный счётчик
+                shared_ctx["shared_state"]["total_tasks_completed"] += 1
+                shared_ctx["shared_state"]["iteration_count"] += 1
+                
+                # ✅ Сохраняем updated context
+                with open(self.shared_context_path, "w", encoding="utf-8") as f:
+                    json.dump(shared_ctx, f, indent=2, ensure_ascii=False)
+                
                 return True
 
             attempt_num = attempt + 1
             core.console.print(f"[bold red]💥 Тесты упали. Попытка {attempt_num}/{MAX_FIX_ATTEMPTS}[/bold red]")
 
             critic_template = self.load_prompt("critic_debugger")
+            
+            # ✅ Передаём весь контекст в промпт Critic
             critic_system = critic_template.format(
                 target_code=target_code,
                 test_code=test_code,
-                test_log=test_log
+                test_log=test_log,
+                shared_context=json.dumps(shared_ctx, indent=2)  # ✅ Добавляем shared context
             )
             raw_fix = self.call_llm(critic_system, "Исправь ошибку.")
             target_code = extract_code_from_markdown(raw_fix)
+            
+            # ✅ Обновляем код в shared context
             with open(target_file, "w", encoding="utf-8") as f:
                 f.write(target_code)
+            
+            shared_ctx["shared_state"]["implementation_code"][task_id]["code"] = target_code
 
         # ── Meta-Optimizer (эволюция промптов) ──
         core.console.print("[red]❌ Предел попыток. Meta-Optimizer...[/red]")
         meta_system = self.load_prompt("role_critic_optimizer")
         current_coder = self.load_prompt("coder_developer")
         meta_user_template = self.load_prompt("role_critic_optimizer_user")
+        
+        # ✅ Передаём shared context в Meta-Optimizer
         meta_user = meta_user_template.format(
             current_coder_prompt=current_coder,
             target_code=target_code,
-            test_log=test_log
+            test_log=test_log,
+            shared_context=json.dumps(shared_ctx, indent=2)  # ✅ Добавляем shared context
         )
         new_prompt = self.call_llm(meta_system, meta_user, model_override="deepseek-r1:32b")
+        
         if core.update_prompt_in_file("coder_developer", new_prompt):
             core.console.print("[yellow]🔄 Промпт обновлён. Hot reload...[/yellow]")
             core.hot_reload()

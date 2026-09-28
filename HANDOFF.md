@@ -1,4 +1,4 @@
-# 📋 Handoff Document: Развитие AI-агента ai-agent (Часть 10)
+# 📋 Handoff Document: Развитие AI-агента ai-agent (Часть 13)
 
 ---
 
@@ -6,7 +6,11 @@
 
 **Задача:** Реализация архитектурных улучшений (Вариант А) для саморазвивающегося AI-агента.
 
-**Статус:** Успешно реализовано **Улучшение №2** — параллельное выполнение задач через `asyncio.gather()`. Ожидается утверждение следующих приоритетов пользователем.
+**Статус:** 
+- ✅ **Улучшение №1:** Настраиваемый `max_steps` через манифест
+- ✅ **Улучшение №2:** Параллельное выполнение задач через `asyncio.gather()`
+- ✅ **Улучшение №3:** Shared context между этапами конвейера (SDD → TDD → Coding)
+- ✅ **Улучшение №4:** Система восстановления после ошибок (retry with escalation)
 
 ---
 
@@ -57,21 +61,34 @@
 
 ---
 
-## 🔴 Оставшиеся улучшения (Вариант А)
+### 3️⃣ **Shared context между этапами конвейера** ✅ (NEW!)
 
-### 3️⃣ **Shared context между этапами конвейера** (SDD → TDD → Coding) ❌
+**Изменения:**
+- Каждый этап (SDD → TDD → Coding) сохраняет данные в `shared_context.json`
+- SDD документ передаётся в TDD, а затем в Coding
+- Тесты передаются из TDD в Coding
+- Critic и Meta-Optimizer получают полный контекст всех предыдущих шагов
+- Глобальный счётчик выполненных задач для мониторинга прогресса
 
-**Проблема:** Каждый шаг — отдельный `call_llm()` без сохранения контекста между шагами.
-
-**Рекомендация:** Создать shared context (например, JSON-файл или in-memory объект), который передаётся между этапами конвейера.
+**Файлы изменены:**
+- [`shared_context.json`](shared_context.json) — структура для хранения shared state
+- [`agents/migration_agent.py`](agents/migration_agent.py) — интеграция с shared context
 
 ---
 
-### 4️⃣ **Система восстановления после ошибок** (retry with escalation) ❌
+### 4️⃣ **Система восстановления после ошибок** ✅ (NEW!)
 
-**Проблема:** При ошибке задача помечается как `failed` без возможности восстановления.
+**Изменения:**
+- Реализован `RetrySystem` в [`agents/retry_system.py`](agents/retry_system.py)
+- Стратегия эскалации:
+  - **Retry**: до 3 попыток с задержкой
+  - **Escalation Level 1**: повышение приоритета задачи
+  - **Escalation Level 2**: Critic review (анализ ошибки)
+  - **Escalation Level 3**: Meta-Optimizer (переписывание промптов + hot reload)
+- Интеграция через `execute_task_with_retry()`
 
-**Рекомендация:** Реализовать систему retry с эскалацией (повышение приоритета, изменение промптов и т.д.).
+**Файлы изменены:**
+- [`agents/retry_system.py`](agents/retry_system.py) — новая система retry с эскалацией
 
 ---
 
@@ -79,9 +96,10 @@
 
 | Файл | Путь | Значение |
 |------|------|----------|
-| migration_manifest.json | [`/home/giv/www/ai-agent/migration_manifest.json`](migration_manifest.json) | Конфиг манифеста с `react_config` |
+| migration_manifest.json | [`/home/giv/www/ai-agent/migration_manifest.json`](migration_manifest.json) | Конфиг манифеста с `react_config` (исправлен!) |
 | agents/migration_agent.py | [`/home/giv/www/ai-agent/agents/migration_agent.py`](agents/migration_agent.py) | Главный агент миграции |
 | core/core.py | [`/home/giv/www/ai-agent/core/core.py`](core/core.py) | BaseAgent + ReActEngine |
+| agents/retry_system.py | [`/home/giv/www/ai-agent/agents/retry_system.py`](agents/retry_system.py) | Система retry с эскалацией (NEW!) |
 | AGENTS.md | [`/home/giv/www/ai-agent/AGENTS.md`](AGENTS.md) | Описание архитектуры агентов |
 | CONTEXT.md | [`/home/giv/www/ai-agent/CONTEXT.md`](CONTEXT.md) | Терминология и доменная модель |
 
@@ -89,10 +107,10 @@
 
 ## 💡 Следующие шаги
 
-1. **Ждать утверждения приоритетов улучшений пользователем**
-2. **Реализовать выбранные улучшения по приоритету**
-3. **Обновить документацию при изменении поведения системы**
-4. **Провести регрессионное тестирование после изменений**
+1. **Интегрировать RetrySystem** в `MigrationAgent.execute_all_parallel()`
+2. **Провести регрессионное тестирование** после изменений
+3. **Документировать новые API** в соответствующих файлах
+4. **Планировать следующие улучшения** (Вариант Б или другие фичи)
 
 ---
 
