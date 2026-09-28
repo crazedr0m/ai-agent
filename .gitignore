@@ -4,4 +4,6 @@ __pycache__
 legacy_src
 modern_src
 tasks.json
+shared_context.json
+
 .env

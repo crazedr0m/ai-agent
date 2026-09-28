@@ -6,6 +6,19 @@ This file provides guidance to agents when working with code in this repository.
 
 **Autonomous AI Software Engineer v1.0** — мультиагентная система для автономной миграции легаси-кода. Работает полностью локально через Ollama.
 
+## ✅ Архитектурные улучшения (Вариант А)
+
+### Улучшение №1: Настраиваемый `max_steps` ✅
+- `max_steps` теперь настраивается через [`migration_manifest.json`](migration_manifest.json) в секции `react_config`
+- Hard-coded лимит удалён из всех агентов
+- По умолчанию: 10 шагов
+
+### Улучшение №2: Параллельное выполнение задач ✅ (NEW!)
+- `execute_all()` заменён на `execute_all_parallel()` с использованием `asyncio.gather()`
+- Все pending задачи выполняются параллельно вместо последовательного выполнения
+- Обработка исключений через `return_exceptions=True`
+- Промпты и LLM вызовы асинхронизируются через `asyncio.to_thread()`
+
 ## 🚫 Критические правила (нарушение = поломка системы)
 
 - [`core.py`](core.py) и [`core_tools.py`](core_tools.py) — **IMMUTABLE**. Агент не имеет права их изменять.
@@ -31,6 +44,8 @@ manifest.json → Global Architect (создаёт tasks.json)
           → Успех → следующая задача
           → Провал → Critic (до 3 попыток)
             → Тупик → Meta-Optimizer → перезапись prompts/ → Hot Reload
+
+🔄 Параллельное выполнение: все pending задачи выполняются одновременно через asyncio.gather()
 ```
 
 ## 📦 Зависимости

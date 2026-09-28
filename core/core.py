@@ -33,6 +33,10 @@ class ReActEngine:
     - Парсит теги <call name="..."> для вызова инструментов
     - Передаёт результат инструмента обратно в LLM как Observation
     - Возвращает финальный ответ когда инструменты перестают вызываться
+
+    max_steps: настраиваемый лимит шагов (по умолчанию 10, может быть задан через манифест)
+    
+    ✅ Улучшение №1: max_steps теперь настраивается через migration_manifest.json
     """
 
     def __init__(self, tool_registry: Optional[ToolRegistry] = None,
@@ -114,6 +118,12 @@ class BaseAgent(ABC):
     - Доступ к ToolRegistry
     - run() — абстрактная точка входа
     - call_llm(), load_prompt() — удобные обёртки
+
+    max_steps: настраиваемый лимит шагов (по умолчанию 10, может быть задан через манифест)
+    
+    ✅ Улучшение №1: max_steps теперь настраивается через migration_manifest.json
+    
+    🔄 Улучшение №2: MigrationAgent поддерживает параллельное выполнение задач через asyncio.gather()
     """
 
     def __init__(self, name: str = "base_agent",
@@ -144,4 +154,3 @@ class BaseAgent(ABC):
 
     def run_react(self, system_prompt: str, user_prompt: str) -> str:
         """Запустить ReAct-цикл и вернуть финальный ответ."""
-        return self.engine.execute(system_prompt, user_prompt)

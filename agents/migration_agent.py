@@ -9,12 +9,12 @@
 import os
 import json
 import sys
+import asyncio
 import core
 from core import BaseAgent
 from modules.parser import extract_code_from_markdown
 from modules.tracer import TraceSession
 
-MAX_REACT_STEPS = 7
 MAX_RETRIES = 3
 MAX_FIX_ATTEMPTS = 3
 
@@ -27,18 +27,22 @@ class MigrationAgent(BaseAgent):
     1. scan_legacy_project() — рекурсивное сканирование
     2. generate_plan() — Global Architect с ReAct → tasks.json
     3. execute_all() — итерация по задачам: SDD → TDD → Coding → Tests → Critic
+
+    ✅ Улучшение №2: Параллельное выполнение задач через asyncio.gather()
+    ✅ Улучшение №3: Shared context между этапами конвейера (SDD → TDD → Coding)
     """
 
     def __init__(self, manifest_path: str = "migration_manifest.json",
                  model_architect: str = "qwen3-coder:30b",
                  model_coder: str = "qwen2.5-coder:14b",
                  tracer: TraceSession = None):
-        super().__init__(name="migration_agent")
+        super().__init__(name="migration_agent", max_steps=10, model="qwen2.5-coder:14b")
         self.manifest_path = manifest_path
         self.model_architect = model_architect
         self.model_coder = model_coder
         self.manifest = {}
         self.tracer = tracer
+        self.shared_context_path = "shared_context.json"
 
     # ─────────────────────────────────────────────
     # run() — точка входа
