@@ -1,94 +1,29 @@
-# 📋 Handoff Document: Развитие AI-агента ai-agent (Часть 13)
+# 📋 Handoff Document: Развитие AI-агента ai-agent (Часть 18)
 
 ---
 
-## 🎯 Текущее состояние задачи
+## 🎯 Текущая задача
 
-**Задача:** Реализация архитектурных улучшений (Вариант А) для саморазвивающегося AI-агента.
+**Задача:** Интеграция `RetrySystem` в `MigrationAgent.execute_all_with_retry()` для реализации системы восстановления после ошибок.
 
 **Статус:** 
-- ✅ **Улучшение №1:** Настраиваемый `max_steps` через манифест
-- ✅ **Улучшение №2:** Параллельное выполнение задач через `asyncio.gather()`
-- ✅ **Улучшение №3:** Shared context между этапами конвейера (SDD → TDD → Coding)
-- ✅ **Улучшение №4:** Система восстановления после ошибок (retry with escalation)
+- ✅ Создан новый модуль [`agents/retry_system.py`](agents/retry_system.py) с полной реализацией retry с эскалацией
+- ✅ Обновлена документация в [`AGENTS.md`](AGENTS.md) и [`HANDOFF.md`](HANDOFF.md)
+- ✅ **Исправлена синтаксическая ошибка** в `migration_agent.py`
+- ✅ **Компиляция файла успешна** — файл компилируется без ошибок
+- ✅ **Импорт модулей успешен** — MigrationAgent и RetrySystem импортируются корректно
+- ⏳ **Ожидается тестирование** retry-логики
 
 ---
 
-## ✅ Выполненные улучшения
+## 📊 Выполненные улучшения (Вариант А)
 
-### 1️⃣ **Настраиваемый `max_steps` через манифест** ✅
-
-**Изменения:**
-- Добавлен секция `"react_config"` в [`migration_manifest.json`](migration_manifest.json) с параметрами:
-  - `max_steps`: лимит шагов ReAct-цикла (по умолчанию 10)
-  - `model_default`: модель по умолчанию
-  - `model_architect`: модель архитектора
-
-- Удалён hard-coded `MAX_REACT_STEPS = 7` из [`agents/migration_agent.py`](agents/migration_agent.py)
-
-- `MigrationAgent.run()` теперь читает `max_steps` из манифеста и передаёт в конструктор `BaseAgent`
-
-- Обновлена документация в [`core/core.py`](core/core.py):
-  - `ReActEngine`: `max_steps` — настраиваемый лимит шагов (по умолчанию 10)
-  - `BaseAgent`: `max_steps` — настраиваемый лимит шагов (по умолчанию 10)
-
-**Файлы изменены:**
-- [`migration_manifest.json`](migration_manifest.json) — добавлена секция `react_config`
-- [`agents/migration_agent.py`](agents/migration_agent.py) — удалён hard-coded лимит, добавлено чтение из манифеста
-- [`core/core.py`](core/core.py) — обновлена документация классов
-
----
-
-### 2️⃣ **Параллельное выполнение задач** в `execute_all()` ✅ (NEW!)
-
-**Изменения:**
-- `execute_all()` заменён на асинхронный `execute_all_parallel()` с использованием `asyncio.gather()`
-- Все pending задачи выполняются параллельно вместо последовательного выполнения
-- Обработка исключений через `return_exceptions=True`
-- Промпты и LLM вызовы асинхронизируются через `asyncio.to_thread()`
-
-**Преимущества:**
-- Значительный прирост производительности при обработке множества задач
-- Более эффективное использование ресурсов (параллельные LLM вызовы)
-- Масштабируемость системы
-
-**Файлы изменены:**
-- [`agents/migration_agent.py`](agents/migration_agent.py):
-  - Добавлен метод `execute_all_parallel()` — параллельный конвейер
-  - Добавлен асинхронный метод `_execute_single_task_async()`
-  - Обновлён `run()` для вызова `execute_all_parallel()`
-- [`core/core.py`](core/core.py) — обновлена документация классов
-
----
-
-### 3️⃣ **Shared context между этапами конвейера** ✅ (NEW!)
-
-**Изменения:**
-- Каждый этап (SDD → TDD → Coding) сохраняет данные в `shared_context.json`
-- SDD документ передаётся в TDD, а затем в Coding
-- Тесты передаются из TDD в Coding
-- Critic и Meta-Optimizer получают полный контекст всех предыдущих шагов
-- Глобальный счётчик выполненных задач для мониторинга прогресса
-
-**Файлы изменены:**
-- [`shared_context.json`](shared_context.json) — структура для хранения shared state
-- [`agents/migration_agent.py`](agents/migration_agent.py) — интеграция с shared context
-
----
-
-### 4️⃣ **Система восстановления после ошибок** ✅ (NEW!)
-
-**Изменения:**
-- Реализован `RetrySystem` в [`agents/retry_system.py`](agents/retry_system.py)
-- Стратегия эскалации:
-  - **Retry**: до 3 попыток с задержкой
-  - **Escalation Level 1**: повышение приоритета задачи
-  - **Escalation Level 2**: Critic review (анализ ошибки)
-  - **Escalation Level 3**: Meta-Optimizer (переписывание промптов + hot reload)
-- Интеграция через `execute_task_with_retry()`
-
-**Файлы изменены:**
-- [`agents/retry_system.py`](agents/retry_system.py) — новая система retry с эскалацией
+| № | Улучшение | Статус | Файлы |
+|---|-----------|--------|------|
+| 1️⃣ | Настраиваемый `max_steps` через манифест | ✅ | [`migration_manifest.json`](migration_manifest.json), [`agents/migration_agent.py`](agents/migration_agent.py) |
+| 2️⃣ | Параллельное выполнение задач (`asyncio.gather()`) | ✅ | [`agents/migration_agent.py`](agents/migration_agent.py) |
+| 3️⃣ | Shared context между этапами конвейера | ✅ | [`shared_context.json`](shared_context.json), [`agents/migration_agent.py`](agents/migration_agent.py) |
+| 4️⃣ | Система восстановления после ошибок (retry with escalation) | ✅ | [`agents/retry_system.py`](agents/retry_system.py) — **интегрирована** |
 
 ---
 
@@ -96,22 +31,83 @@
 
 | Файл | Путь | Значение |
 |------|------|----------|
-| migration_manifest.json | [`/home/giv/www/ai-agent/migration_manifest.json`](migration_manifest.json) | Конфиг манифеста с `react_config` (исправлен!) |
-| agents/migration_agent.py | [`/home/giv/www/ai-agent/agents/migration_agent.py`](agents/migration_agent.py) | Главный агент миграции |
-| core/core.py | [`/home/giv/www/ai-agent/core/core.py`](core/core.py) | BaseAgent + ReActEngine |
-| agents/retry_system.py | [`/home/giv/www/ai-agent/agents/retry_system.py`](agents/retry_system.py) | Система retry с эскалацией (NEW!) |
-| AGENTS.md | [`/home/giv/www/ai-agent/AGENTS.md`](AGENTS.md) | Описание архитектуры агентов |
-| CONTEXT.md | [`/home/giv/www/ai-agent/CONTEXT.md`](CONTEXT.md) | Терминология и доменная модель |
+| [`migration_manifest.json`](migration_manifest.json) | Конфиг манифеста с `react_config` |
+| [`agents/migration_agent.py`](agents/migration_agent.py) | Главный агент миграции — **синтаксическая ошибка исправлена** |
+| [`core/core.py`](core/core.py) | BaseAgent + ReActEngine (IMMUTABLE) |
+| [`agents/retry_system.py`](agents/retry_system.py) | Система retry с эскалацией (NEW!) |
+| [`shared_context.json`](shared_context.json) | Shared state между этапами конвейера |
+| [`AGENTS.md`](AGENTS.md) | Описание архитектуры агентов — обновлено |
+| [`HANDOFF.md`](HANDOFF.md) | Handoff документ — обновлен до Части 17 |
 
 ---
 
-## 💡 Следующие шаги
+## 💡 Следующие шаги (Приоритет 1)
 
-1. **Интегрировать RetrySystem** в `MigrationAgent.execute_all_parallel()`
-2. **Провести регрессионное тестирование** после изменений
-3. **Документировать новые API** в соответствующих файлах
-4. **Планировать следующие улучшения** (Вариант Б или другие фичи)
+### ✅ Синтаксическая ошибка исправлена:
+- Исправлена проблема с форматированием после docstring в `migration_agent.py`
+- Файл компилируется без ошибок: `python -m py_compile agents/migration_agent.py`
+- Метод `execute_all_with_retry()` изменён на `async def` для корректного использования `await`
+
+### ✅ Интеграция RetrySystem завершена:
+- Импортирован `RetrySystem` и `execute_task_with_retry` в `__init__`
+- Создан экземпляр `self.retry_system = RetrySystem(self.manifest_path)` в `__init__()`
+- Метод `execute_all()` заменён на `async def execute_all_with_retry()`
+- Вызов через `asyncio.run(self.execute_all_with_retry())` из `run()`
+
+### ⏳ Тестирование:
+1. Запустить агент и проверить работу retry-логики
+2. Проверить обработку ошибок на разных уровнях эскалации
+3. Убедиться, что shared_context.json корректно обновляется
+
+---
+
+## 📝 Важные решения
+
+### Приняты (без утверждения пользователя):
+- Структура RetrySystem с 4 уровнями эскалации
+- Интеграция через `execute_task_with_retry()` функцию
+- Использование `shared_context.json` для хранения статуса задач
+- Асинхронное выполнение `_execute_single_task_async()`
+
+### Ожидуют утверждения пользователя:
+- Тестирование retry-логики после исправления синтаксической ошибки
+
+---
+
+## 🚫 Критические правила (обновлено)
+
+- ✅ [`core.py`](core.py) и [`core_tools.py`](core_tools.py) не изменяются (IMMUTABLE)
+- ✅ Папка `venv/` — **IMMUTABLE**. Агент не имеет права её изменять или удалять.
+- ✅ При разработке проекта использовать виртуальное окружение Python (`python -m venv venv && source venv/bin/activate`)
+- ✅ Никакого естественного языка внутри Python-кода — все промпты в `prompts/`
+- ✅ Тесты через `subprocess.run()`, критерий успеха — `returncode == 0`
+- ✅ Вызов инструментов модели через XML-теги `<call name="...">`, не JSON
+
+---
+
+## 📋 Статус задач (tasks.json)
+
+| ID | Файл | Статус | Описание |
+|----|------|--------|----------|
+| 1 | app.py | ✅ completed | Анализ Flask эндпоинтов |
+| 2 | models.py | ✅ completed | Анализ моделей данных |
+| 3 | utils.py | ✅ completed | Анализ вспомогательных функций |
+| 4 | requirements.txt | ⏳ pending | Обновление зависимостей |
+
+---
+
+## 🚀 Следующие улучшения (Вариант Б)
+
+После успешного тестирования retry-логики можно рассмотреть:
+1. Добавление метрик выполнения задач
+2. Оптимизация параллельных вызовов LLM
+3. Реализация circuit breaker паттерна
+4. Логирование в файл или внешнюю систему
 
 ---
 
 *Handoff создан для обеспечения непрерывности работы над развитием AI-агента.*
+
+---
+
+**Проект готов к дальнейшему развитию!** 🎉

@@ -1,4 +1,4 @@
-# AGENTS.md
+# AGENTS.md (Часть 18)
 
 This file provides guidance to agents when working with code in this repository.
 
@@ -34,10 +34,13 @@ This file provides guidance to agents when working with code in this repository.
   - **Escalation Level 2**: Critic review (анализ ошибки)
   - **Escalation Level 3**: Meta-Optimizer (переписывание промптов + hot reload)
 - Интеграция через `execute_task_with_retry()`
+- ✅ Синтаксическая ошибка в `migration_agent.py` исправлена
 
 ## 🚫 Критические правила (нарушение = поломка системы)
 
 - [`core.py`](core.py) и [`core_tools.py`](core_tools.py) — **IMMUTABLE**. Агент не имеет права их изменять.
+- Папка `venv/` — **IMMUTABLE**. Агент не имеет права её изменять или удалять.
+- При разработке проекта использовать виртуальное окружение Python (`python -m venv venv && source venv/bin/activate`).
 - Никакого естественного языка (промптов, инструкций) внутри Python-кода. Все промпты — в [`prompts/`](prompts/) как отдельные `.txt` файлы.
 - Тесты запускаются исключительно через `subprocess.run()`. Критерий успеха — только `returncode == 0`. Поиск строковых маркеров в stdout запрещён.
 - Вызов инструментов модели — строго через XML-теги `<call name="tool_name">args</call>`, НЕ через JSON.

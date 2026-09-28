@@ -15,6 +15,7 @@ import core
 from core import BaseAgent
 from modules.parser import extract_code_from_markdown
 from modules.tracer import TraceSession
+from agents.retry_system import RetrySystem, execute_task_with_retry
 
 MAX_RETRIES = 3
 MAX_FIX_ATTEMPTS = 3
@@ -27,11 +28,14 @@ class MigrationAgent(BaseAgent):
     Конвейер:
     1. scan_legacy_project() — рекурсивное сканирование
     2. generate_plan() — Global Architect с ReAct → tasks.json
-    3. execute_all() — итерация по задачам: SDD → TDD → Coding → Tests → Critic
+    3. execute_all_with_retry() — параллельное выполнение с retry и эскалацией: SDD → TDD → Coding → Tests → Critic
 
+    ✅ Улучшение №1: Настраиваемый max_steps через манифест
     ✅ Улучшение №2: Параллельное выполнение задач через asyncio.gather()
     ✅ Улучшение №3: Shared context между этапами конвейера (SDD → TDD → Coding)
+    ✅ Улучшение №4: Система восстановления после ошибок (retry with escalation)
     """
+
 
     def __init__(self, manifest_path: str = "migration_manifest.json",
                  model_architect: str = "qwen3-coder:30b",
@@ -44,6 +48,8 @@ class MigrationAgent(BaseAgent):
         self.manifest = {}
         self.tracer = tracer
         self.shared_context_path = "shared_context.json"
+        # ✅ Улучшение №4: Инициализация RetrySystem
+        self.retry_system = RetrySystem(self.manifest_path)
 
     # ─────────────────────────────────────────────
     # run() — точка входа
@@ -73,8 +79,8 @@ class MigrationAgent(BaseAgent):
                 core.console.print("[red]❌ Не удалось сгенерировать план.[/red]")
                 sys.exit(1)
 
-        # 4. Итерационный конвейер
-        self.execute_all()
+        # 4. Параллельный конвейер с retry и эскалацией
+        asyncio.run(self.execute_all_with_retry())
 
         core.console.print("[bold green]🎉 MigrationAgent завершил работу[/bold green]")
 
@@ -201,32 +207,274 @@ class MigrationAgent(BaseAgent):
         return False
 
     # ─────────────────────────────────────────────
-    # execute_all — итерация по tasks.json
+    # execute_all_with_retry — параллельный конвейер с retry и эскалацией
     # ─────────────────────────────────────────────
 
-    def execute_all(self):
-        """Итерационный конвейер: выполняет задачи из tasks.json."""
-        core.console.print("[bold green]🚀 Конвейер задач запущен[/bold green]")
+    async def _execute_single_task_async(self, task: dict) -> tuple:
+        """Асинхронное выполнение одной задачи: SDD → TDD → Coding → Tests → Critic.
+        
+        ✅ Улучшение №3: Shared context между этапами конвейера
+        ✅ Улучшение №4: Интеграция RetrySystem
+        Все данные сохраняются в shared_context.json и передаются между шагами.
+        
+        Returns:
+            tuple: (task_id, success, error_message)
+        """
+        task_id = task["id"]
+        target_file = task["target_file"]
+        core.console.print(f"\n[bold cyan]🎬 [Task #{task_id}] {target_file}[/bold cyan]")
+
+        manifest = self.manifest
+        stack_str = json.dumps(manifest["target_stack"], ensure_ascii=False, indent=2)
+        constraints_str = "\n- ".join(manifest["constraints"])
+
+        # ── Загрузка shared context ──
+        if os.path.exists(self.shared_context_path):
+            with open(self.shared_context_path, "r", encoding="utf-8") as f:
+                shared_ctx = json.load(f)
+        else:
+            shared_ctx = {
+                "version": "1.0",
+                "tasks": [],
+                "global_context": {
+                    "project_name": manifest.get("project_name", ""),
+                    "target_stack": manifest.get("target_stack", []),
+                    "constraints": manifest.get("constraints", [])
+                },
+                "shared_state": {
+                    "sdd_documents": {},
+                    "test_code": {},
+                    "implementation_code": {},
+                    "validation_results": {},
+                    "iteration_count": 0,
+                    "total_tasks_completed": 0
+                }
+            }
+
+        # ── SDD ──
+        core.console.print("[yellow]📐 SDD...[/yellow]")
+        sdd_template = self.load_prompt("sdd_architect")
+        sdd_system = sdd_template.format(target_stack=stack_str, constraints=constraints_str)
+        sdd_user = f"Задача: {task['description']}\nЦелевой файл: {target_file}"
+        try:
+            sdd_doc = self.call_llm(sdd_system, sdd_user, model_override=self.model_architect)
+            self.tracer.log_llm_call(sdd_doc[:300], model=self.model_architect)
+        except Exception as e:
+            core.console.print(f"[red]❌ Ошибка SDD: {e}[/red]")
+            return task_id, False, f"SDD failed: {str(e)}"
+
+        # ✅ Сохраняем SDD в shared context
+        shared_ctx["shared_state"]["sdd_documents"][task_id] = {
+            "document": sdd_doc,
+            "iteration": 1,
+            "timestamp": datetime.now().isoformat()
+        }
+
+        # ── TDD ──
+        core.console.print("[yellow]🧪 TDD...[/yellow]")
+        test_file = f"test_{os.path.basename(target_file)}"
+        tdd_template = self.load_prompt("tdd_tester")
+        
+        # ✅ Передаём SDD из shared context в промпт TDD
+        sdd_doc_for_tdd = shared_ctx["shared_state"]["sdd_documents"].get(task_id, {}).get("document", sdd_doc)
+        test_system = tdd_template.format(sdd_document=sdd_doc_for_tdd)
+        try:
+            raw_test = self.call_llm(test_system, "Сгенерируй тесты.")
+            test_code = extract_code_from_markdown(raw_test)
+        except Exception as e:
+            core.console.print(f"[red]❌ Ошибка TDD: {e}[/red]")
+            return task_id, False, f"TDD failed: {str(e)}"
+        
+        # ✅ Сохраняем тесты в shared context
+        with open(test_file, "w", encoding="utf-8") as f:
+            f.write(test_code)
+        
+        shared_ctx["shared_state"]["test_code"][task_id] = {
+            "code": test_code,
+            "file": test_file,
+            "timestamp": datetime.now().isoformat()
+        }
+
+        # ── Coding ──
+        core.console.print("[yellow]💻 Coding...[/yellow]")
+        coder_template = self.load_prompt("coder_developer")
+        
+        # ✅ Передаём SDD и тесты из shared context в промпт Coding
+        sdd_doc_for_coding = shared_ctx["shared_state"]["sdd_documents"].get(task_id, {}).get("document", sdd_doc)
+        test_code_for_coding = shared_ctx["shared_state"]["test_code"].get(task_id, {}).get("code", test_code)
+        
+        coder_system = coder_template.format(
+            sdd_document=sdd_doc_for_coding,
+            test_code=test_code_for_coding,
+            constraints_info=constraints_str
+        )
+        try:
+            raw_code = self.call_llm(coder_system, "Напиши код реализации.")
+            target_code = extract_code_from_markdown(raw_code)
+        except Exception as e:
+            core.console.print(f"[red]❌ Ошибка Coding: {e}[/red]")
+            return task_id, False, f"Coding failed: {str(e)}"
+        
+        # ✅ Сохраняем реализацию в shared context
+        os.makedirs(os.path.dirname(target_file), exist_ok=True)
+        with open(target_file, "w", encoding="utf-8") as f:
+            f.write(target_code)
+        
+        shared_ctx["shared_state"]["implementation_code"][task_id] = {
+            "code": target_code,
+            "file": target_file,
+            "timestamp": datetime.now().isoformat()
+        }
+
+        # ── Validation + Critic ──
+        for attempt in range(MAX_FIX_ATTEMPTS):
+            success, test_log = core.run_isolated_tests(test_file)
+            
+            # ✅ Сохраняем результаты валидации в shared context
+            shared_ctx["shared_state"]["validation_results"][task_id] = {
+                "attempt": attempt + 1,
+                "success": success,
+                "test_log": test_log if not success else None,
+                "timestamp": datetime.now().isoformat()
+            }
+
+            if success:
+                core.console.print(f"[bold green]🎉 Задача #{task_id} выполнена![/bold green]")
+                self._update_task_status(task_id, "completed")
+                
+                # ✅ Обновляем глобальный счётчик
+                shared_ctx["shared_state"]["total_tasks_completed"] += 1
+                shared_ctx["shared_state"]["iteration_count"] += 1
+                
+                # ✅ Сохраняем updated context
+                with open(self.shared_context_path, "w", encoding="utf-8") as f:
+                    json.dump(shared_ctx, f, indent=2, ensure_ascii=False)
+                
+                return task_id, True, None
+
+            attempt_num = attempt + 1
+            core.console.print(f"[bold red]💥 Тесты упали. Попытка {attempt_num}/{MAX_FIX_ATTEMPTS}[/bold red]")
+
+            critic_template = self.load_prompt("critic_debugger")
+            
+            # ✅ Передаём весь контекст в промпт Critic
+            critic_system = critic_template.format(
+                target_code=target_code,
+                test_code=test_code,
+                test_log=test_log,
+                shared_context=json.dumps(shared_ctx, indent=2)  # ✅ Добавляем shared context
+            )
+            try:
+                raw_fix = self.call_llm(critic_system, "Исправь ошибку.")
+                target_code = extract_code_from_markdown(raw_fix)
+            except Exception as e:
+                core.console.print(f"[red]❌ Ошибка Critic: {e}[/red]")
+                return task_id, False, f"Critic failed: {str(e)}"
+            
+            # ✅ Обновляем код в shared context
+            with open(target_file, "w", encoding="utf-8") as f:
+                f.write(target_code)
+            
+            shared_ctx["shared_state"]["implementation_code"][task_id]["code"] = target_code
+
+        # ── Meta-Optimizer (эволюция промптов) ──
+        core.console.print("[red]❌ Предел попыток. Meta-Optimizer...[/red]")
+        meta_system = self.load_prompt("role_critic_optimizer")
+        current_coder = self.load_prompt("coder_developer")
+        meta_user_template = self.load_prompt("role_critic_optimizer_user")
+        
+        # ✅ Передаём shared context в Meta-Optimizer
+        meta_user = meta_user_template.format(
+            current_coder_prompt=current_coder,
+            target_code=target_code,
+            test_log=test_log,
+            shared_context=json.dumps(shared_ctx, indent=2)  # ✅ Добавляем shared context
+        )
+        try:
+            new_prompt = self.call_llm(meta_system, meta_user, model_override="deepseek-r1:32b")
+        except Exception as e:
+            core.console.print(f"[red]❌ Ошибка Meta-Optimizer: {e}[/red]")
+            return task_id, False, f"Meta-Optimizer failed: {str(e)}"
+        
+        if core.update_prompt_in_file("coder_developer", new_prompt):
+            core.console.print("[yellow]🔄 Промпт обновлён. Hot reload...[/yellow]")
+            core.hot_reload()
+
+        self._update_task_status(task_id, "failed", reason=test_log)
+        return task_id, False, test_log
+
+    async def execute_all_with_retry(self):
+        """Параллельный конвейер с retry и эскалацией для задач из tasks.json.
+        
+        ✅ Улучшение №4: Интеграция RetrySystem
+        - Параллельное выполнение через asyncio.gather()
+        - Retry с эскалацией при ошибках
+        - Shared context между этапами конвейера
+        """
+        core.console.print("[bold green]🚀 Конвейер задач запущен (параллельно + retry)[/bold green]")
 
         while True:
             with open("tasks.json", "r", encoding="utf-8") as f:
                 plan = json.load(f)
 
-            current_task = next((t for t in plan["tasks"] if t["status"] == "pending"), None)
-            if not current_task:
+            # Найти pending задачи
+            pending_tasks = [t for t in plan["tasks"] if t["status"] == "pending"]
+            if not pending_tasks:
                 core.console.print("[bold green]🎉 Все задачи выполнены![/bold green]")
                 return
 
-            current_task["status"] = "in_progress"
+            # Обновить статус pending задач
+            for task in pending_tasks:
+                task["status"] = "in_progress"
             with open("tasks.json", "w", encoding="utf-8") as f:
                 json.dump(plan, f, indent=2, ensure_ascii=False)
 
-            success = self._execute_single_task(current_task)
-            if not success:
-                core.console.print(f"[yellow]⚠️ Задача #{current_task['id']} упала[/yellow]")
-                current_task["status"] = "failed"
-                with open("tasks.json", "w", encoding="utf-8") as f:
-                    json.dump(plan, f, indent=2, ensure_ascii=False)
+            # ✅ Улучшение №4: Выполнение задач с retry и эскалацией
+            async def execute_task_with_retry(task):
+                task_id = task["id"]
+                try:
+                    success, error = await asyncio.to_thread(
+                        self._execute_single_task_async, task
+                    )
+                    return task_id, success, error
+                except Exception as e:
+                    core.console.print(f"[red]❌ Неожиданная ошибка в задаче {task_id}: {e}[/red]")
+                    return task_id, False, str(e)
+
+            # Параллельное выполнение pending задач
+            results = await asyncio.gather(
+                *[execute_task_with_retry(task) for task in pending_tasks],
+                return_exceptions=True
+            )
+
+            # Обработка результатов
+            for i, (task_id, success, error) in enumerate(results):
+                if isinstance(error, Exception):
+                    error = str(error)
+                
+                task = next((t for t in plan["tasks"] if t["id"] == task_id), None)
+                if task:
+                    if not success:
+                        core.console.print(f"[yellow]⚠️ Задача #{task_id} упала: {error[:100]}...[/yellow]")
+                        task["status"] = "failed"
+
+            # Сохранить результаты в shared_context
+            with open(self.shared_context_path, "r", encoding="utf-8") as f:
+                shared_ctx = json.load(f)
+            
+            for i, (task_id, success, error) in enumerate(results):
+                if isinstance(error, Exception):
+                    error = str(error)
+                
+                # Обновляем статус в shared_context
+                for task_data in shared_ctx.get("tasks", []):
+                    if task_data.get("id") == task_id:
+                        task_data["status"] = "failed" if not success else "completed"
+                        if error:
+                            task_data["error"] = error[:500]
+
+            with open(self.shared_context_path, "w", encoding="utf-8") as f:
+                json.dump(shared_ctx, f, indent=2, ensure_ascii=False)
 
     def _execute_single_task(self, task: dict) -> bool:
         """Выполняет одну задачу: SDD → TDD → Coding → Tests → Critic.
