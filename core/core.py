@@ -47,7 +47,12 @@ class ReActEngine:
         self.model = model
 
     def execute(self, system_prompt: str, user_prompt: str) -> str:
-        """Запускает ReAct-цикл. Возвращает финальный ответ модели."""
+        """Запускает ReAct-цикл. Возвращает финальный ответ модели.
+
+        Фаза 1.5: Repair-цикл — невалидный вызов (неверные аргументы,
+        отсутствующие обязательные параметры) возвращается модели
+        с точным описанием ошибки для исправления. До 2 retry на шаг.
+        """
         current_user = user_prompt
         step = 0
 
@@ -63,42 +68,95 @@ class ReActEngine:
 
             has_call, result = self.execute_tool_call(raw)
 
-            if has_call:
+            if not has_call:
+                # Нет вызова — финальный ответ
+                return raw
+
+            # Repair-цикл (Фаза 1.5): проверяем, что вызов был успешным
+            # execute_tool_call возвращает <tool_result> при успехе
+            # или сообщение об ошибке при провале.
+            result_text = result.strip()
+            if result_text.startswith("<tool_result"):
+                # Успешный вызов — передаём результат обратно модели
                 current_user = (
                     f"Результат выполнения инструмента:\n{result}\n"
                     "Продолжай выполнение."
                 )
                 continue
 
-            return raw
+            # Ошибка (неизвестный инструмент, сбой) — repair
+            console.print(f"[yellow]⚠️ Repair: {result_text[:100]}[/yellow]")
+
+            # До 2 попыток исправить
+            repaired = False
+            for repair_attempt in range(2):
+                repair_prompt = (
+                    f"Произошла ошибка при выполнении вызова:\n"
+                    f"{result_text}\n\n"
+                    f"Пожалуйста, исправь вызов и повтори. "
+                    f"Убедись, что все обязательные параметры указаны "
+                    f"с правильными типами."
+                )
+                raw2 = _root_core.call_ollama(
+                    system_prompt, repair_prompt,
+                    model_override=self.model)
+                if not raw2:
+                    break
+
+                has_call2, result2 = self.execute_tool_call(raw2)
+                if has_call2 and result2.strip().startswith("<tool_result"):
+                    current_user = (
+                        f"Результат выполнения инструмента:\n{result2}\n"
+                        "Продолжай выполнение."
+                    )
+                    repaired = True
+                    break
+                result_text = result2
+
+            if repaired:
+                continue
+
+            # Repair не удался — отдаём ошибку модели и продолжаем
+            current_user = (
+                f"Не удалось выполнить вызов. Ошибка: {result_text}\n"
+                "Продолжай выполнение без этого инструмента."
+            )
 
         console.print(f"[yellow]⚠️ ReAct-цикл исчерпал лимит шагов ({self.max_steps})[/yellow]")
         return ""
 
     def execute_tool_call(self, model_response: str) -> tuple[bool, str]:
-        """Ищет <call name="...">...</call> в ответе модели."""
-        match = re.search(r'<call name="(\w+)">(.*?)</call>',
-                          model_response, re.DOTALL)
-        if not match:
+        """Ищет <call name="...">...</call> в ответе модели.
+
+        Фаза 1.3: использует validate_call() для парсинга аргументов по JSON Schema.
+        Фаза 1.4: использует tool_parser.parse_tool_call() для мультиформатного парсинга.
+        """
+        from modules.tool_parser import parse_tool_call
+
+        parsed = parse_tool_call(model_response)
+        if parsed is None:
             return False, ""
 
-        tool_name = match.group(1)
-        raw_args = match.group(2).strip()
+        tool_name, parsed_args = parsed
 
         tool_func = self.tool_registry.get(tool_name)
         if not tool_func:
             return True, (f"Ошибка: Инструмент '{tool_name}' "
                           f"не зарегистрирован в реестре.")
 
+        # Валидация аргументов по схеме (Фаза 1.3)
+        is_valid, kwargs, error = self.tool_registry.validate_call(
+            tool_name, parsed_args)
+
         console.print(f"[bold cyan]🔧 Вызов инструмента: "
-                      f"{tool_name}({raw_args})[/bold cyan]")
+                      f"{tool_name}({kwargs})[/bold cyan]")
+
+        if not is_valid and kwargs:
+            # Парсинг удался частично — используем что смогли
+            pass
 
         try:
-            if tool_name == "read_file_chunk" and "," in raw_args:
-                parts = [p.strip() for p in raw_args.split(",", 2)]
-                result = tool_func(parts[0], int(parts[1]), int(parts[2]))
-            else:
-                result = tool_func(raw_args)
+            result = tool_func(**kwargs)
 
             return True, f"\n<tool_result name=\"{tool_name}\">\n{result}\n</tool_result>\n"
         except Exception as e:

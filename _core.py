@@ -12,7 +12,7 @@ from rich.panel import Panel
 
 # Инициализируем компоненты
 console = Console()
-OLLAMA_URL = "http://192.168.5.7:11434/api/generate"
+OLLAMA_URL = "http://192.168.5.7:11434/api/chat"
 ANALYZER_MODEL = "qwen2.5-coder:14b"
 
 # Динамически импортируем изменяемый модуль парсера
@@ -80,20 +80,21 @@ def update_prompt_in_file(role_key: str, new_text: str) -> bool:
     return True
 
 def call_ollama(system_prompt: str, user_prompt: str, model_override: str = None) -> str:
-    """Стандартизированный метод отправки запросов в Ollama."""
-    payload = {
-        "model": model_override or ANALYZER_MODEL,
-        "prompt": f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n",
-        "stream": False,
-        "options": {"temperature": 0.2}
-    }
-    try:
-        response = requests.post(OLLAMA_URL, json=payload)
-        response.raise_for_status()
-        return response.json()["response"]
-    except Exception as e:
-        console.print(f"[red]❌ Системный сбой при вызове Ollama: {e}[/red]")
-        return ""
+    """Стандартизированный метод отправки запросов в Ollama.
+
+    Использует OllamaAdapter из modules/llm/:
+    - Основной путь: /api/chat (Ollama сам подставляет шаблон)
+    - Fallback: /api/generate с ChatML для старых моделей
+    - Timeout 120с, до 2 retry при ConnectionError/таймауте
+    """
+    from modules.llm import call_chat
+    return call_chat(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        model_override=model_override,
+        temperature=0.2,
+        num_ctx=8192,
+    )
 
 def run_isolated_tests(test_file: str) -> tuple[bool, str]:
     """Изолированный запуск тестов с контролем returncode."""

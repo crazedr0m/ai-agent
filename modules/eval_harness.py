@@ -190,14 +190,12 @@ class EvalRunner:
                     duration_ms=duration,
                 )
 
-            # Парсим сырой ответ напрямую: ищем <call name="...">...</call>
-            import re
-            call_match = re.search(r'<call name="(\w+)">(.*?)</call>',
-                                   raw, re.DOTALL)
-
-            if call_match:
-                parsed_tool = call_match.group(1)
-                parsed_args = call_match.group(2).strip()
+            # Парсим сырой ответ через мультиформатный парсер (Фаза 1.4):
+            # XML, Hermes XML, JSON-блок, plain JSON.
+            from modules.tool_parser import parse_tool_call
+            parsed = parse_tool_call(raw)
+            if parsed is not None:
+                parsed_tool, parsed_args = parsed
             else:
                 parsed_tool = None
                 parsed_args = None
