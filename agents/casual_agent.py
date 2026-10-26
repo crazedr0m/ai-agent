@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# agents/daily_agent.py — DailyAgent(BaseAgent)
+# agents/casual_agent.py — CasualAgent(BaseAgent)
 #
 # Минимальный ReAct-агент для вопросов по коду:
 # read_file, list_dir, search, view_file_outline
@@ -23,15 +23,15 @@ _SYSTEM_PROMPT_TEMPLATE = """Ты — полезный ассистент для
 """
 
 
-class DailyAgent(BaseAgent):
+class CasualAgent(BaseAgent):
     """
-    DailyAgent — базовый ReAct-ассистент для вопросов по коду.
+    CasualAgent — базовый ReAct-ассистент для вопросов по коду.
 
     Использует инструменты: list_dir, view_file_outline, read_file_chunk
     """
 
     def __init__(self):
-        super().__init__(name="daily_agent", max_steps=15)
+        super().__init__(name="casual_agent", max_steps=15)
 
     def run(self, user_query: str = "") -> str:
         """Точка входа: отвечает на вопрос пользователя."""
@@ -41,7 +41,7 @@ class DailyAgent(BaseAgent):
         tools_help = self.tool_registry.list_tools()
         system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(tools_help=tools_help)
 
-        core.console.print(f"[green]🤖 DailyAgent: {user_query[:100]}...[/green]")
+        core.console.print(f"[green]🤖 CasualAgent: {user_query[:100]}...[/green]")
 
         result = self.run_react(system_prompt, user_query)
         return result

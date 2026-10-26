@@ -9,7 +9,7 @@ ai-agent/
 │   └── core_tools.py         # Инструменты + @register_tool
 ├── agents/
 │   ├── migration_agent.py    # Текущий конвейер SDD→TDD→Coding
-│   └── daily_agent.py        # Базовый ReAct-ассистент (v1 заготовка)
+│   └── casual_agent.py       # Базовый ReAct-ассистент (v1 заготовка)
 ├── modules/
 │   ├── tracer.py             # Трейсинг (JSONL, ротация)
 │   ├── mcp_client.py         # MCP-клиент (HTTP/SSE)
@@ -38,7 +38,7 @@ T4. [modules] Tracer (tracer.py)           ← можно параллельно
   ↓ (нужен для тестирования агентов)
 T5. [agents] MigrationAgent               ← блокирует удаление initializer+executor
   ↓
-T6. [agents] DailyAgent (заготовка)       ← независим от T5
+T6. [agents] CasualAgent (заготовка)      ← независим от T5
   ↓
 T7. [modules] MCP-клиент (mcp_client.py)   ← независим от T5-T6
   ↓
@@ -71,7 +71,7 @@ T10.[cleanup] Удаление executor.py        ← после T5
 
 | Тикет | Файл | Описание |
 |---|---|---|
-| T6 | `agents/daily_agent.py` | `DailyAgent(BaseAgent)` — минимальный ReAct: вопросы по коду, read_file/list_dir/search |
+| T6 | `agents/casual_agent.py` | `CasualAgent(BaseAgent)` — минимальный ReAct: вопросы по коду, read_file/list_dir/search |
 | T7 | `modules/mcp_client.py` | MCP-клиент: SSE-подключение, получение инструментов, регистрация в ToolRegistry |
 
 ### Priority 3: Инфраструктура
@@ -87,7 +87,7 @@ T10.[cleanup] Удаление executor.py        ← после T5
 ```mermaid
 flowchart TD
     T1[BaseAgent + ReActEngine] --> T5[MigrationAgent]
-    T1 --> T6[DailyAgent]
+    T1 --> T6[CasualAgent]
     T2[@register_tool] --> T3[Миграция инструментов]
     T4[Tracer] --> T5
     T4 --> T6
@@ -105,7 +105,7 @@ flowchart TD
 
 - **MCP-генератор** (агент пишет свои MCP-серверы)
 - **Ретроспективы по трейсам** (анализ сессий, self-improvement промптов)
-- **Meta-агент** (оркестрация между MigrationAgent и DailyAgent)
+- **Meta-агент** (оркестрация между MigrationAgent и CasualAgent)
 - **Улучшение парсера** (regex-парсер для ReAct вызовов)
 - **Self-extension** (агент пишет новые модули)
 - **RAG по трейсам**
@@ -116,7 +116,7 @@ flowchart TD
 1. `BaseAgent` в core.py, `MigrationAgent` работает через него (ReAct-цикл)
 2. Все инструменты зарегистрированы через `@register_tool`
 3. Трейсы пишутся в `traces/session_<timestamp>/` в JSONL-формате
-4. `DailyAgent` отвечает на вопросы по коду с инструментами
+4. `CasualAgent` отвечает на вопросы по коду с инструментами
 5. MCP-клиент подключается к Web fetch и Filesystem серверам
 6. `initializer.py` — тонкая обёртка
 7. `executor.py` удалён

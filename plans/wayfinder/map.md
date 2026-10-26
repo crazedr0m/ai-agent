@@ -2,7 +2,7 @@
 
 ## Destination
 
-Переход от monolith-конвейера миграции легаси к модульной мультиагентной архитектуре с саморазвитием (self-healing → self-improvement → self-extension → meta-cognition). v1: рефакторинг ядра + трейсинг + MCP-клиент. Путь ясен, когда `core/core.py` содержит абстрактный `BaseAgent`, `MigrationAgent` работает через него, `DailyAgent` даёт базовый ReAct, а трейсы пишутся в `traces/`.
+Переход от monolith-конвейера миграции легаси к модульной мультиагентной архитектуре с саморазвитием (self-healing → self-improvement → self-extension → meta-cognition). v1: рефакторинг ядра + трейсинг + MCP-клиент. Путь ясен, когда `core/core.py` содержит абстрактный `BaseAgent`, `MigrationAgent` работает через него, `CasualAgent` даёт базовый ReAct, а трейсы пишутся в `traces/`.
 
 ## Notes
 

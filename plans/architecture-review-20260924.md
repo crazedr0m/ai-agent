@@ -30,7 +30,7 @@
          ↕ наследники
 ┌─────────── Агенты ────────────────┐
 │  agents/migration_agent.py (393L) │
-│  agents/daily_agent.py            │
+│  agents/casual_agent.py           │
 └───────────────────────────────────┘
          ↕ register_tool
 ┌───────── Инструменты ─────────────┐
@@ -109,7 +109,7 @@ tasks.json                TaskStore
 
 ### Проблема
 - `MigrationAgent._execute_single_task()` (строки 226-306) содержит ВЕСЬ конвейер: SDD, TDD, Coding, Critic, Meta-Optimizer
-- 80 строк связанной логики, которая не может быть переиспользована `DailyAgent`
+- 80 строк связанной логики, которая не может быть переиспользована `CasualAgent`
 - **Deletion test:** удаление этого метода не сконцентрирует сложность, а размажет её по `agent.py`
 
 ### Решение
@@ -155,7 +155,7 @@ return entry[prompt]              return entry[prompt]
 ### Проблема
 - Трейсинг в `MigrationAgent` делается вручную: `self.tracer.log_llm_call()`, `self.tracer.log_tool_call()` — 6 вызовов
 - Легко забыть залогировать шаг (уже были баги)
-- `DailyAgent` вообще не использует трейсинг
+- `CasualAgent` вообще не использует трейсинг
 
 ### Решение
 Создать `@trace_call(model=...)` декоратор для `call_llm()`. `TraceSession` подключается через контекстный менеджер, а не через аргументы. Декоратор логирует duration_ms, model, prompt (truncated) автоматически.
