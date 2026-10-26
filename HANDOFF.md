@@ -33,7 +33,7 @@
 |------|------|----------|
 | [`migration_manifest.json`](migration_manifest.json) | Конфиг манифеста с `react_config` |
 | [`agents/migration_agent.py`](agents/migration_agent.py) | Главный агент миграции — **синтаксическая ошибка исправлена** |
-| [`core/core.py`](core/core.py) | BaseAgent + ReActEngine (IMMUTABLE) |
+| [`core/core.py`](core/core.py) | BaseAgent + ReActEngine (supervised, см. ADR-001) |
 | [`agents/retry_system.py`](agents/retry_system.py) | Система retry с эскалацией (NEW!) |
 | [`shared_context.json`](shared_context.json) | Shared state между этапами конвейера |
 | [`AGENTS.md`](AGENTS.md) | Описание архитектуры агентов — обновлено |
@@ -76,8 +76,8 @@
 
 ## 🚫 Критические правила (обновлено)
 
-- ✅ [`core.py`](core.py) и [`core_tools.py`](core_tools.py) не изменяются (IMMUTABLE)
-- ✅ Папка `venv/` — **IMMUTABLE**. Агент не имеет права её изменять или удалять.
+- ✅ Зоны мутабельности: см. [`ADR-001`](docs/adr/ADR-001-core-boundaries.md)
+- ✅ `venv/` — **IMMUTABLE**. Агент не имеет права её изменять или удалять.
 - ✅ При разработке проекта использовать виртуальное окружение Python (`python -m venv venv && source venv/bin/activate`)
 - ✅ Никакого естественного языка внутри Python-кода — все промпты в `prompts/`
 - ✅ Тесты через `subprocess.run()`, критерий успеха — `returncode == 0`

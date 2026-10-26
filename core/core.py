@@ -61,7 +61,7 @@ class ReActEngine:
                 console.print("[red]❌ Пустой ответ от LLM.[/red]")
                 return ""
 
-            has_call, result = self._execute_tool_call(raw)
+            has_call, result = self.execute_tool_call(raw)
 
             if has_call:
                 current_user = (
@@ -75,7 +75,7 @@ class ReActEngine:
         console.print(f"[yellow]⚠️ ReAct-цикл исчерпал лимит шагов ({self.max_steps})[/yellow]")
         return ""
 
-    def _execute_tool_call(self, model_response: str) -> tuple[bool, str]:
+    def execute_tool_call(self, model_response: str) -> tuple[bool, str]:
         """Ищет <call name="...">...</call> в ответе модели."""
         match = re.search(r'<call name="(\w+)">(.*?)</call>',
                           model_response, re.DOTALL)

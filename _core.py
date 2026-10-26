@@ -19,47 +19,7 @@ ANALYZER_MODEL = "qwen2.5-coder:14b"
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from modules.parser import extract_code_from_markdown
 
-import re
-
-# Корневой core.py не импортирует core.core_tools напрямую,
-# чтобы избежать циклического импорта (__init__.py ещё грузится).
-# _GLOBAL_REGISTRY доступен через import core_tools (корневой файл)
-# или через core._GLOBAL_REGISTRY (после полной загрузки пакета)
-
-def execute_model_tools(model_response: str) -> tuple[bool, str]:
-    """
-    Ищет теги <call name="...">...</call> в ответе модели.
-    Если находит, выполняет встроенную функцию и возвращает (True, "Результат работы инструмента").
-    Если инструментов не вызвано, возвращает (False, "").
-    """
-    # Ищем паттерн <call name="tool_name">arguments</call>
-    match = re.search(r'<call name="(\w+)">(.*?)</call>', model_response, re.DOTALL)
-    
-    if not match:
-        return False, ""
-        
-    tool_name = match.group(1)
-    raw_args = match.group(2).strip()
-    
-    # Ленивый импорт — core_tools загружается после core/ пакета
-    from core.core_tools import _GLOBAL_REGISTRY, get_tool
-    
-    if tool_name not in _GLOBAL_REGISTRY:
-        return True, f"Ошибка: Инструмент '{tool_name}' не зарегистрирован в ядре."
-        
-    console.print(f"[bold cyan]🔧 Ядро перехватило вызов инструмента: {tool_name}({raw_args})[/bold cyan]")
-    
-    tool_func = get_tool(tool_name)
-    try:
-        if "," in raw_args and tool_name == "read_file_chunk":
-            parts = [p.strip() for p in raw_args.split(",", 2)]
-            result = tool_func(parts[0], int(parts[1]), int(parts[2]))
-        else:
-            result = tool_func(raw_args)
-            
-        return True, f"\n<tool_result name=\"{tool_name}\">\n{result}\n</tool_result>\n"
-    except Exception as e:
-        return True, f"Системный сбой при выполнении инструмента: {e}"
+# execute_model_tools удалён (дубль ReActEngine.execute_tool_call в core/core.py)
 
 
 def load_prompt(role_key: str) -> str:

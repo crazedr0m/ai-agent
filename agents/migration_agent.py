@@ -156,7 +156,7 @@ class MigrationAgent(BaseAgent):
 
                 self.tracer.log_llm_call(raw_response[:500], model=self.model_architect)
 
-                has_tool_call, tool_result = core.execute_model_tools(raw_response)
+                has_tool_call, tool_result = self.engine.execute_tool_call(raw_response)
                 if has_tool_call:
                     self.tracer.log_tool_call("architect_tool", raw_response[:200], tool_result[:200])
                     user_request = (

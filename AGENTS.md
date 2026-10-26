@@ -38,19 +38,28 @@ This file provides guidance to agents when working with code in this repository.
 
 ## 🚫 Критические правила (нарушение = поломка системы)
 
-- [`core.py`](core.py) и [`core_tools.py`](core_tools.py) — **IMMUTABLE**. Агент не имеет права их изменять.
-- Папка `venv/` — **IMMUTABLE**. Агент не имеет права её изменять или удалять.
+- `venv/` — **IMMUTABLE**. Агент не имеет права её изменять или удалять.
 - При разработке проекта использовать виртуальное окружение Python (`python -m venv venv && source venv/bin/activate`).
 - Никакого естественного языка (промптов, инструкций) внутри Python-кода. Все промпты — в [`prompts/`](prompts/) как отдельные `.txt` файлы.
 - Тесты запускаются исключительно через `subprocess.run()`. Критерий успеха — только `returncode == 0`. Поиск строковых маркеров в stdout запрещён.
-- Вызов инструментов модели — строго через XML-теги `<call name="tool_name">args</call>`, НЕ через JSON.
+- Формат вызова инструментов — **любой**, который система может обработать (XML, JSON, tool_call native). См. [`ADR-001`](docs/adr/ADR-001-core-boundaries.md).
+
+## 🔧 Зоны мутабельности (см. [`ADR-001`](docs/adr/ADR-001-core-boundaries.md))
+
+| Зона | Файлы | Правило |
+|------|-------|---------|
+| **supervised** | [`_core.py`](_core.py), [`core/core.py`](core/core.py), [`core/core_tools.py`](core/core_tools.py), [`core/__init__.py`](core/__init__.py) | Изменения требуют подтверждения человека (y/n) |
+| **autonomous** | [`core_tools.py`](core_tools.py) (корень), `agents/*.py`, `modules/*.py`, `prompts/*.txt`, [`prompts.json`](prompts.json) | Агент может менять самостоятельно (с учётом флага `mutability` в prompts.json) |
+| **kernel** | *(пока пусто)* | Только человек. Добавление файла — через новый ADR |
 
 ## 🔧 Неочевидные детали архитектуры
 
-- [`core.py`](core.py:14) жёстко зашивает `OLLAMA_URL = "http://192.168.5.7:11434/api/generate"` — это не конфиг, а константа.
+- [`_core.py:15`](_core.py:15) жёстко зашивает `OLLAMA_URL = "http://192.168.5.7:11434/api/generate"` — это не конфиг, а константа.
 - Модели: `qwen2.5-coder:14b` (default), `qwen3-coder:30b` (архитектор/SDD), `deepseek-r1:32b` (мета-оптимизация промптов).
-- [`core.py`](core.py:109) использует `os.execv()` для hot reload — процесс перезапускается в памяти.
+- [`_core.py:147`](_core.py:147) использует `os.execv()` для hot reload — процесс перезапускается в памяти.
 - [`prompts.json`](prompts.json) содержит два типа записей: с inline `prompt` и с `file_path` в `prompts/`. Это два разных механизма загрузки.
+- [`core/__init__.py`](core/__init__.py) проксирует атрибуты из `_core.py` в пакет `core`, чтобы `import core` продолжал работать.
+- `execute_model_tools()` в `_core.py` **удалён** (был дублём `ReActEngine.execute_tool_call` в `core/core.py`).
 
 ## 🏗️ Конвейер выполнения
 

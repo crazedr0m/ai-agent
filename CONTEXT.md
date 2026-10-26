@@ -33,7 +33,7 @@
 Один шаг ReAct-цикла: входной промпт, ответ LLM, распарсенный вызов инструмента, результат выполнения, флаг ошибки.
 
 ### Core (Ядро)
-Неизменяемый слой: `core.py` и `core_tools.py`. Содержит базовые инструменты (list_dir, read_file, и т.д.), вызов Ollama, hot reload, управление промптами.
+Загрузчик и цикл исполнения. Состоит из supervised-файлов ([`_core.py`](_core.py) — низкоуровневые функции, [`core/core.py`](core/core.py) — BaseAgent + ReActEngine, [`core/core_tools.py`](core/core_tools.py) — ToolRegistry) и autonomous-файла [`core_tools.py`](core_tools.py) (реализации инструментов). См. [`ADR-001`](docs/adr/ADR-001-core-boundaries.md).
 
 ### Migration Agent
 Агент миграции легаси-кода (текущий конвейер SDD → TDD → Coding). Наследует BaseAgent.

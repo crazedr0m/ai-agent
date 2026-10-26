@@ -338,30 +338,32 @@ class TestToolsIntegration(unittest.TestCase):
                           f"{name} не зарегистрирован")
 
 
-class TestExecuteModelTools(unittest.TestCase):
-    """Тесты для execute_model_tools (парсинг <call name=\"...\">)."""
+class TestExecuteToolCall(unittest.TestCase):
+    """Тесты для ReActEngine.execute_tool_call (парсинг <call name=\"...\">)."""
 
     def setUp(self):
         # Регистрируем инструменты перед тестом
         import core_tools  # noqa
+        from core.core import ReActEngine
+        self.engine = ReActEngine(max_steps=3)
 
     def test_parse_tool_call(self):
         """Парсинг простого вызова инструмента."""
-        found, result = core.execute_model_tools(
+        found, result = self.engine.execute_tool_call(
             '<call name="list_dir">.</call>')
         self.assertTrue(found)
         self.assertIn("<tool_result", result)
 
     def test_parse_no_tool_call(self):
         """Нет вызова — возвращает (False, '')."""
-        found, result = core.execute_model_tools(
+        found, result = self.engine.execute_tool_call(
             "Просто текст без инструментов")
         self.assertFalse(found)
         self.assertEqual(result, "")
 
     def test_parse_unknown_tool(self):
         """Неизвестный инструмент — возвращает ошибку."""
-        found, result = core.execute_model_tools(
+        found, result = self.engine.execute_tool_call(
             '<call name="nonexistent">arg</call>')
         self.assertTrue(found)
         self.assertIn("не зарегистрирован", result)
