@@ -4,7 +4,8 @@
 # modular-архитектура:
 #   server.py  — FastMCP-инстанс + импорт tools
 #   tools.py   — инструменты с @mcp.tool()
-#   helpers.py — вспомогательные функции (кэш, обход AST)
+#   core.py    — ядро: кэш, обход файлов
+#   languages/ — языковые модули (python, php, javascript, typescript, go)
 #
 # Запуск:
 #   python -m mcp_servers.code_analyzer           # stdio
@@ -20,13 +21,22 @@ from mcp_servers.code_analyzer.tools import (  # noqa: F401
     query_function,
     query_callers,
     query_callees,
+    query_cross_references,
+    query_js_from_php,
+    scan_php_js_project,
 )
+
+# Импортируем реестр языков, чтобы анализаторы зарегистрировались
+import mcp_servers.code_analyzer.languages  # noqa: F401, E402
 
 __all__ = [
     "scan_project",
     "query_function",
     "query_callers",
     "query_callees",
+    "query_cross_references",
+    "query_js_from_php",
+    "scan_php_js_project",
 ]
 
 

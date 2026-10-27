@@ -60,7 +60,7 @@ def run():
 
     def _reset_cache(self):
         """Сбросить кэш AST через прямой вызов."""
-        from mcp_servers.code_analyzer.tools import _clear_cache
+        from mcp_servers.code_analyzer.core import _clear_cache
         _clear_cache()
 
     def test_scan_project(self):

@@ -18,7 +18,7 @@
       "transport": "stdio",
       "command": "python",
       "args": ["-m", "mcp_servers.code_analyzer"],
-      "description": "Static code analysis: scan projects, query symbols, build call graphs (Tree-sitter)",
+      "description": "Static code analysis: scan projects (Python/PHP/JS/TS/Go), query symbols, call graphs, PHP→JS cross-language bridge (Tree-sitter)",
       "timeout": 60
     },
     "substrate": {

@@ -1,299 +1,142 @@
 # -*- coding: utf-8 -*-
 # mcp_servers/code_analyzer/tools.py — Инструменты анализатора кода
 #
-# 4 инструмента:
-#   - scan_project     — полное сканирование проекта, возвращает граф
-#   - query_function   — сигнатура + тело + кто вызывает + кого вызывает
-#   - query_callers    — кто вызывает функцию
-#   - query_callees    — кого вызывает функция
+# 7 инструментов:
+#   - scan_project              — полное сканирование проекта (все языки)
+#   - query_function            — сигнатура + тело + кто вызывает + кого вызывает
+#   - query_callers             — кто вызывает функцию
+#   - query_callees             — кого вызывает функция
+#   - query_cross_references    — поиск символа во всех языках проекта
+#   - query_js_from_php         — PHP→JS кроссязыковый анализ (один файл)
+#   - query_php_js_scan         — PHP→JS сканирование всего проекта
 #
-# Базируется на Tree-sitter Python API.
+# Не содержит логики обхода AST — делегирует языковым модулям через ParserRegistry.
 
-import os
 import json
-from typing import Optional
-
-from tree_sitter import Language, Parser
-import tree_sitter_python
+import os
 
 from mcp_servers.code_analyzer.server import mcp
-
-# ── Инициализация парсера (один раз) ─────────────────────────────
-_LANGUAGE = Language(tree_sitter_python.language())
-_PARSER = Parser(_LANGUAGE)
-
-# ── Кэш AST ──────────────────────────────────────────────────────
-_ast_cache: dict[str, dict] = {}
-
-
-def _parse_file(filepath: str) -> dict | None:
-    """Распарсить файл, вернуть AST-структуру (с кэшированием)."""
-    if filepath in _ast_cache:
-        return _ast_cache[filepath]
-
-    if not os.path.isfile(filepath):
-        return None
-
-    try:
-        with open(filepath, "rb") as f:
-            code = f.read()
-    except Exception:
-        return None
-
-    tree = _PARSER.parse(code)
-    _ast_cache[filepath] = {
-        "tree": tree,
-        "code": code.decode("utf-8", errors="replace"),
-        "root": tree.root_node,
-    }
-    return _ast_cache[filepath]
+from mcp_servers.code_analyzer.core import _clear_cache, _get_all_files
+from mcp_servers.code_analyzer.languages import (
+    get_analyzer,
+    get_supported_languages,
+    infer_language,
+)
+from mcp_servers.code_analyzer.cross_language.php_js_bridge import (
+    analyze_php_to_js,
+    scan_project_php_to_js,
+)
 
 
-def _clear_cache():
-    """Сбросить кэш AST (для тестов и принудительного пересканирования)."""
-    _ast_cache.clear()
+def _resolve_analyzer(file_path: str, language: str | None = None) -> tuple:
+    """Определить анализатор по языку или расширению файла.
 
+    Returns:
+        (BaseAnalyzer | None, str | None) — (анализатор, сообщение об ошибке)
+    """
+    if language is None:
+        language = infer_language(file_path)
+        if language is None:
+            return None, f"Не удалось определить язык для '{file_path}'"
 
-# ── Внутренние структуры ─────────────────────────────────────────
+    analyzer = get_analyzer(language)
+    if analyzer is None:
+        supported = ", ".join(get_supported_languages())
+        return None, f"Язык '{language}' не поддерживается. Поддерживаются: {supported}"
 
-
-def _get_text(node, code: str) -> str:
-    """Извлечь текст узла AST из исходного кода."""
-    return code[node.start_byte:node.end_byte]
-
-
-def _collect_definitions(filepath: str) -> dict:
-    """Собрать все функции, классы, импорты, вызовы из файла."""
-    parsed = _parse_file(filepath)
-    if parsed is None:
-        return {"functions": [], "classes": [], "imports": [], "calls": []}
-
-    root = parsed["root"]
-    code = parsed["code"]
-    result = {"functions": [], "classes": [], "imports": [], "calls": []}
-
-    def walk(node):
-        if node.type == "function_definition":
-            name_node = node.child_by_field_name("name")
-            result["functions"].append({
-                "name": _get_text(name_node, code) if name_node else "<anon>",
-                "start_line": node.start_point[0] + 1,
-                "end_line": node.end_point[0] + 1,
-                "start_byte": node.start_byte,
-                "end_byte": node.end_byte,
-            })
-        elif node.type == "class_definition":
-            name_node = node.child_by_field_name("name")
-            result["classes"].append({
-                "name": _get_text(name_node, code) if name_node else "<anon>",
-                "start_line": node.start_point[0] + 1,
-                "end_line": node.end_point[0] + 1,
-            })
-        elif node.type == "import_statement":
-            result["imports"].append(_get_text(node, code))
-        elif node.type == "import_from_statement":
-            result["imports"].append(_get_text(node, code))
-        elif node.type == "call":
-            func_node = node.child_by_field_name("function")
-            if func_node:
-                result["calls"].append({
-                    "name": _get_text(func_node, code),
-                    "line": node.start_point[0] + 1,
-                })
-
-        for child in node.children:
-            walk(child)
-
-    walk(root)
-    return result
-
-
-def _get_function_signature(filepath: str, func_name: str) -> dict | None:
-    """Извлечь сигнатуру функции: имя, параметры, return_type, docstring."""
-    parsed = _parse_file(filepath)
-    if parsed is None:
-        return None
-
-    root = parsed["root"]
-    code = parsed["code"]
-
-    def find_func(node):
-        if node.type == "function_definition":
-            name_node = node.child_by_field_name("name")
-            if name_node and _get_text(name_node, code) == func_name:
-                return node
-        for child in node.children:
-            result = find_func(child)
-            if result:
-                return result
-        return None
-
-    func_node = find_func(root)
-    if not func_node:
-        return None
-
-    name_node = func_node.child_by_field_name("name")
-    params_node = func_node.child_by_field_name("parameters")
-    return_type_node = func_node.child_by_field_name("return_type")
-
-    name = _get_text(name_node, code) if name_node else func_name
-
-    params = []
-    if params_node:
-        for child in params_node.children:
-            if child.type == "typed_parameter":
-                # typed_parameter: identifier ":" type
-                # tree-sitter-python field names for typed_parameter
-                # may use 'name' and 'type' fields; fallback to child iteration
-                pname_node = child.child_by_field_name("name")
-                ptype_node = child.child_by_field_name("type")
-                if pname_node is None:
-                    for gc in child.children:
-                        if gc.type == "identifier":
-                            pname_node = gc
-                        elif gc.type == "type":
-                            ptype_node = gc
-                params.append({
-                    "name": _get_text(pname_node, code) if pname_node else "?",
-                    "type": _get_text(ptype_node, code) if ptype_node else None,
-                })
-            elif child.type == "identifier":
-                params.append({
-                    "name": _get_text(child, code),
-                    "type": None,
-                })
-
-    return_type = None
-    if return_type_node:
-        return_type = _get_text(return_type_node, code)
-
-    # Docstring
-    body = func_node.child_by_field_name("body")
-    docstring = None
-    if body and body.children:
-        first = body.children[0]
-        if first.type == "expression_statement" and first.children:
-            expr = first.children[0]
-            if expr.type == "string":
-                raw = _get_text(expr, code)
-                docstring = raw.strip("\"'")
-
-    return {
-        "name": name,
-        "params": params,
-        "return_type": return_type,
-        "docstring": docstring,
-        "start_line": func_node.start_point[0] + 1,
-        "end_line": func_node.end_point[0] + 1,
-        "body": _get_text(func_node, code),
-    }
-
-
-def _build_call_graph(filepath: str) -> dict[str, list[str]]:
-    """Построить граф вызовов: {caller: [callee, ...]}."""
-    parsed = _parse_file(filepath)
-    if parsed is None:
-        return {}
-
-    root = parsed["root"]
-    code = parsed["code"]
-    graph: dict[str, list[str]] = {}
-
-    def walk(node, current_function=None):
-        if node.type == "function_definition":
-            name_node = node.child_by_field_name("name")
-            current_function = _get_text(name_node, code) if name_node else None
-            if current_function:
-                graph[current_function] = []
-
-        if node.type == "call" and current_function:
-            func_node = node.child_by_field_name("function")
-            if func_node:
-                callee = _get_text(func_node, code)
-                graph[current_function].append(callee)
-
-        for child in node.children:
-            walk(child, current_function)
-
-    walk(root)
-    return graph
-
-
-def _get_all_files(root_path: str, pattern: str = ".py") -> list[str]:
-    """Рекурсивно найти все Python-файлы в директории."""
-    files = []
-    for dirpath, dirnames, filenames in os.walk(root_path):
-        # Пропускаем venv, __pycache__, .git
-        dirnames[:] = [
-            d for d in dirnames
-            if not d.startswith(".")
-            and d not in ("venv", "__pycache__", "node_modules")
-        ]
-        for f in filenames:
-            if f.endswith(pattern):
-                files.append(os.path.join(dirpath, f))
-    return sorted(files)
+    return analyzer, None
 
 
 # ── MCP-инструменты ──────────────────────────────────────────────
 
 
 @mcp.tool()
-def scan_project(root_path: str) -> str:
+def scan_project(root_path: str, language: str | None = None) -> str:
     """Полное сканирование проекта: функции, классы, импорты, граф вызовов.
+
+    Если language не указан — сканируются все поддерживаемые языки.
+    Если language указан — сканируются только файлы этого языка.
 
     Args:
         root_path: корневая директория проекта
+        language: язык для сканирования (например "python", "php", "js"),
+                  или None для всех языков
     """
     if not os.path.isdir(root_path):
         return f"Ошибка: папка '{root_path}' не найдена"
 
     _clear_cache()
-    py_files = _get_all_files(root_path)
+
+    if language:
+        languages_to_scan = [language]
+    else:
+        languages_to_scan = get_supported_languages()
 
     all_functions = []
     all_classes = []
     all_imports = []
     call_graph: dict[str, list[str]] = {}
     file_index: dict[str, list[str]] = {}
+    total_files = 0
 
-    for fp in py_files:
-        rel = os.path.relpath(fp, root_path)
-        defs = _collect_definitions(fp)
+    for lang in languages_to_scan:
+        analyzer = get_analyzer(lang)
+        if analyzer is None:
+            continue
 
-        for fn in defs["functions"]:
-            fn["file"] = rel
-            all_functions.append(fn)
+        # Определяем расширение по языку
+        ext_map = {
+            "python": ".py",
+            "php": ".php",
+            "javascript": ".js",
+            "typescript": ".ts",
+            "go": ".go",
+        }
+        ext = ext_map.get(lang, ".txt")
+        files = _get_all_files(root_path, extension=ext)
 
-        for cls in defs["classes"]:
-            cls["file"] = rel
-            all_classes.append(cls)
+        for fp in files:
+            rel = os.path.relpath(fp, root_path)
+            defs = analyzer.collect_definitions(fp)
 
-        all_imports.extend({
-            "file": rel,
-            "statement": imp,
-        } for imp in defs["imports"])
+            for fn in defs["functions"]:
+                fn["file"] = rel
+                fn["language"] = lang
+                all_functions.append(fn)
 
-        fg = _build_call_graph(fp)
-        for caller, callees in fg.items():
-            if caller not in call_graph:
-                call_graph[caller] = []
-            call_graph[caller].extend(callees)
+            for cls in defs["classes"]:
+                cls["file"] = rel
+                cls["language"] = lang
+                all_classes.append(cls)
 
-        file_index[rel] = [fn["name"] for fn in defs["functions"]]
+            all_imports.extend({
+                "file": rel,
+                "language": lang,
+                "statement": imp,
+            } for imp in defs["imports"])
+
+            fg = analyzer.build_call_graph(fp)
+            for caller, callees in fg.items():
+                if caller not in call_graph:
+                    call_graph[caller] = []
+                call_graph[caller].extend(callees)
+
+            file_index[rel] = [fn["name"] for fn in defs["functions"]]
+            total_files += 1
 
     summary = {
-        "files_scanned": len(py_files),
+        "files_scanned": total_files,
         "total_functions": len(all_functions),
         "total_classes": len(all_classes),
         "total_imports": len(all_imports),
+        "languages": languages_to_scan,
     }
 
     result = {
         "summary": summary,
         "functions": all_functions,
         "classes": all_classes,
-        "imports": all_imports[:200],  # ограничение по объёму
+        "imports": all_imports[:200],
         "call_graph": {k: list(set(v)) for k, v in call_graph.items()},
         "file_index": file_index,
     }
@@ -302,22 +145,28 @@ def scan_project(root_path: str) -> str:
 
 
 @mcp.tool()
-def query_function(file_path: str, function_name: str) -> str:
+def query_function(
+    file_path: str,
+    function_name: str,
+    language: str | None = None,
+) -> str:
     """Найти функцию и её контекст: сигнатура, тело, callers, callees.
 
     Args:
         file_path: путь к файлу
         function_name: имя функции
+        language: язык (определяется автоматически по расширению, если не указан)
     """
-    sig = _get_function_signature(file_path, function_name)
+    analyzer, error = _resolve_analyzer(file_path, language)
+    if error:
+        return error
+
+    sig = analyzer.get_symbol_signature(file_path, function_name)
     if sig is None:
         return f"Ошибка: функция '{function_name}' не найдена в '{file_path}'"
 
-    # Граф вызовов в этом файле
-    graph = _build_call_graph(file_path)
+    graph = analyzer.build_call_graph(file_path)
     callees = graph.get(function_name, [])
-
-    # Кто вызывает эту функцию в файле
     callers = [
         caller for caller, callee_list in graph.items()
         if function_name in callee_list
@@ -333,14 +182,23 @@ def query_function(file_path: str, function_name: str) -> str:
 
 
 @mcp.tool()
-def query_callers(file_path: str, function_name: str) -> str:
+def query_callers(
+    file_path: str,
+    function_name: str,
+    language: str | None = None,
+) -> str:
     """Кто вызывает функцию.
 
     Args:
         file_path: путь к файлу
         function_name: имя функции
+        language: язык (определяется автоматически по расширению, если не указан)
     """
-    graph = _build_call_graph(file_path)
+    analyzer, error = _resolve_analyzer(file_path, language)
+    if error:
+        return error
+
+    graph = analyzer.build_call_graph(file_path)
     callers = [
         caller for caller, callee_list in graph.items()
         if function_name in callee_list
@@ -357,14 +215,23 @@ def query_callers(file_path: str, function_name: str) -> str:
 
 
 @mcp.tool()
-def query_callees(file_path: str, function_name: str) -> str:
+def query_callees(
+    file_path: str,
+    function_name: str,
+    language: str | None = None,
+) -> str:
     """Кого вызывает функция.
 
     Args:
         file_path: путь к файлу
         function_name: имя функции
+        language: язык (определяется автоматически по расширению, если не указан)
     """
-    graph = _build_call_graph(file_path)
+    analyzer, error = _resolve_analyzer(file_path, language)
+    if error:
+        return error
+
+    graph = analyzer.build_call_graph(file_path)
     callees = graph.get(function_name, [])
 
     if not callees:
@@ -374,4 +241,115 @@ def query_callees(file_path: str, function_name: str) -> str:
         "function": function_name,
         "file": file_path,
         "callees": callees,
+    }, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def query_cross_references(symbol_name: str, project_path: str) -> str:
+    """Найти все вхождения символа во всех языках проекта.
+
+    Args:
+        symbol_name: имя символа (функции/класса)
+        project_path: корневая директория проекта
+    """
+    if not os.path.isdir(project_path):
+        return f"Ошибка: папка '{project_path}' не найдена"
+
+    results = []
+
+    for lang in get_supported_languages():
+        analyzer = get_analyzer(lang)
+        if analyzer is None:
+            continue
+
+        ext_map = {
+            "python": ".py",
+            "php": ".php",
+            "javascript": ".js",
+            "typescript": ".ts",
+            "go": ".go",
+        }
+        ext = ext_map.get(lang, ".txt")
+        files = _get_all_files(project_path, extension=ext)
+
+        for fp in files:
+            sig = analyzer.get_symbol_signature(fp, symbol_name)
+            if sig:
+                rel = os.path.relpath(fp, project_path)
+                results.append({
+                    "language": lang,
+                    "file": rel,
+                    "type": "definition",
+                    "signature": sig,
+                })
+
+            # Ищем вызовы
+            graph = analyzer.build_call_graph(fp)
+            for caller, callees in graph.items():
+                if symbol_name in callees:
+                    rel = os.path.relpath(fp, project_path)
+                    results.append({
+                        "language": lang,
+                        "file": rel,
+                        "type": "caller",
+                        "caller": caller,
+                    })
+
+    if not results:
+        return f"Символ '{symbol_name}' не найден в проекте '{project_path}'"
+
+    return json.dumps({
+        "symbol": symbol_name,
+        "project": project_path,
+        "occurrences": results,
+    }, indent=2, ensure_ascii=False)
+
+
+# ── Кроссязыковые инструменты ─────────────────────────────────────
+
+
+@mcp.tool()
+def query_js_from_php(php_file_path: str, project_path: str) -> str:
+    """Проанализировать PHP-файл на предмет генерации JS-кода в строках.
+
+    Анализирует цепочку: PHP (echo/print/строки) → HTML → <script>/inline-JS
+    → поиск определений JS-символов в .js/.ts файлах.
+
+    Args:
+        php_file_path: путь к PHP-файлу
+        project_path: корневая директория проекта (для поиска .js/.ts)
+    """
+    result = analyze_php_to_js(php_file_path, project_path)
+    return json.dumps(result, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def scan_php_js_project(project_path: str) -> str:
+    """Сканировать весь проект на PHP→JS кроссязыковые связи.
+
+    Находит все PHP-файлы, генерирующие JS-код через строковые литералы,
+    и связывает их с определениями в .js/.ts файлах.
+
+    Args:
+        project_path: корневая директория проекта
+    """
+    results = scan_project_php_to_js(project_path)
+    if not results:
+        return json.dumps({
+            "message": f"PHP→JS связи не найдены в '{project_path}'",
+            "files_with_js": 0,
+        }, indent=2, ensure_ascii=False)
+
+    total_js_fragments = sum(
+        r["summary"]["js_fragments_found"] for r in results
+    )
+    total_resolved = sum(
+        r["summary"]["resolved_in_js_files"] for r in results
+    )
+
+    return json.dumps({
+        "php_files_with_js": len(results),
+        "total_js_fragments": total_js_fragments,
+        "total_resolved_symbols": total_resolved,
+        "details": results,
     }, indent=2, ensure_ascii=False)
