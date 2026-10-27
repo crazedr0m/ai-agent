@@ -3,14 +3,14 @@
     "filesystem": {
       "transport": "stdio",
       "command": "python",
-      "args": ["mcp_server_filesystem.py"],
+      "args": ["-m", "mcp_servers.filesystem"],
       "description": "Filesystem operations (read, write, list, search, stat)",
       "timeout": 30
     },
     "fetch": {
       "transport": "stdio",
       "command": "python",
-      "args": ["mcp_server_fetch.py"],
+      "args": ["-m", "mcp_servers.fetch"],
       "description": "Web fetch and HTML-to-markdown conversion",
       "timeout": 30
     }

@@ -91,7 +91,12 @@ class Scaffold:
 
     def create_mcp_server(self, name: str, filename: str = None,
                            description: str = "") -> str:
-        """Создать новый MCP-сервер на FastMCP.
+        """Создать новый MCP-сервер на FastMCP (modular-архитектура).
+
+        Создаёт подкаталог mcp_servers/<name>/ с файлами:
+          - __init__.py  — точка входа, main()
+          - server.py    — FastMCP-инстанс
+          - tools.py     — инструменты с @mcp.tool()
 
         Args:
             name: имя сервера (snake_case)
@@ -99,22 +104,25 @@ class Scaffold:
             description: описание сервера
 
         Returns:
-            путь к созданному файлу
+            путь к созданному подкаталогу
         """
-        filename = filename or f"mcp_server_{name}.py"
-        filepath = os.path.join(self.repo_path, filename)
+        dirpath = os.path.join(self.repo_path, "mcp_servers", name)
 
-        if os.path.exists(filepath):
-            raise ScaffoldError(f"Файл {filepath} уже существует")
+        if os.path.exists(dirpath):
+            raise ScaffoldError(f"Подкаталог {dirpath} уже существует")
 
-        content = self._mcp_server_template(name, description)
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(content)
+        os.makedirs(dirpath, exist_ok=True)
+
+        # Создаём файлы modular-архитектуры
+        for fname, content in self._mcp_server_files(name, description):
+            fpath = os.path.join(dirpath, fname)
+            with open(fpath, "w", encoding="utf-8") as f:
+                f.write(content)
 
         # Создаём тест
-        self._create_mcp_test(name, filename)
+        self._create_mcp_test(name, filename or f"mcp_server_{name}.py")
 
-        return filepath
+        return dirpath
 
     # ─────────────────────────────────────────────
     # Шаблоны
@@ -171,35 +179,34 @@ class {name.capitalize()}:
         return f"✅ {{self.__class__.__name__}} executed"
 '''
 
-    def _mcp_server_template(self, name: str, description: str) -> str:
-        return f'''# -*- coding: utf-8 -*-
-# mcp_server_{name}.py — MCP-сервер: {description or name}
+    def _mcp_server_files(self, name: str, description: str
+                          ) -> list[tuple[str, str]]:
+        """Сгенерировать файлы modular MCP-сервера.
+
+        Returns:
+            список (имя_файла, содержимое)
+        """
+        now = datetime.now().strftime('%Y-%m-%d %H:%M')
+        desc = description or name
+
+        init_content = f'''# -*- coding: utf-8 -*-
+# mcp_servers/{name}/__init__.py — MCP-сервер: {desc}
 #
-# Создан агентом через Scaffold ({datetime.now().strftime('%Y-%m-%d %H:%M')})
+# Создан агентом через Scaffold ({now})
 #
 # Запуск:
-#     python mcp_server_{name}.py  # stdio
-#     python mcp_server_{name}.py --transport sse --port 3300
+#     python -m mcp_servers.{name}           # stdio
+#     python -m mcp_servers.{name} --transport sse --port 3300
 
 import argparse
 
-from fastmcp import FastMCP
-
-mcp = FastMCP(
-    "{name}-server",
-    instructions="{description or name}",
-    version="1.0.0",
-)
-
-
-@mcp.tool()
-def ping() -> str:
-    """Проверка доступности сервера."""
-    return "pong"
+from mcp_servers.{name}.server import mcp
+from mcp_servers.{name}.tools import ping  # noqa: F401
 
 
 def main():
-    parser = argparse.ArgumentParser(description="{description or name}")
+    # Точка входа: парсит аргументы и запускает сервер
+    parser = argparse.ArgumentParser(description="{desc}")
     parser.add_argument("--transport", choices=["stdio", "sse"], default="stdio")
     parser.add_argument("--port", type=int, default=3300)
     parser.add_argument("--host", default="127.0.0.1")
@@ -210,10 +217,45 @@ def main():
     else:
         mcp.run(transport="stdio")
 
-
-if __name__ == "__main__":
-    main()
 '''
+        server_content = f'''# -*- coding: utf-8 -*-
+# mcp_servers/{name}/server.py — FastMCP-инстанс
+#
+# Создан агентом через Scaffold ({now})
+
+from fastmcp import FastMCP
+
+mcp = FastMCP(
+    "{name}-server",
+    instructions="{desc}",
+    version="1.0.0",
+)
+
+import mcp_servers.{name}.tools  # noqa: F401
+'''
+
+        tools_content = f'''# -*- coding: utf-8 -*-
+# mcp_servers/{name}/tools.py — Инструменты MCP-сервера {name}
+#
+# Создан агентом через Scaffold ({now})
+
+from mcp_servers.{name}.server import mcp
+
+
+@mcp.tool()
+def ping() -> str:
+    # Проверка доступности сервера
+    return "pong"
+
+
+# TODO: добавить инструменты сервера
+'''
+
+        return [
+            ("__init__.py", init_content),
+            ("server.py", server_content),
+            ("tools.py", tools_content),
+        ]
 
     # ─────────────────────────────────────────────
     # Тесты
@@ -223,7 +265,7 @@ if __name__ == "__main__":
         """Добавить тест для нового инструмента в test_core.py."""
         test_code = f'''
     def test_{name}(self):
-        """{name} возвращает результат."""
+        # {name} возвращает результат
         import {name.replace(".py", "")}
         result = {name.replace(".py", "")}.{name}("test")
         self.assertIn("executed", result)
@@ -234,7 +276,7 @@ if __name__ == "__main__":
         """Добавить тест для нового модуля в test_core.py."""
         test_code = f'''
     def test_{name}(self):
-        """{name} запускается без ошибок."""
+        # {name} запускается без ошибок
         from modules.{name} import {name.capitalize()}
         instance = {name.capitalize()}()
         result = instance.run()
@@ -246,8 +288,8 @@ if __name__ == "__main__":
         """Добавить тест для нового MCP-сервера в test_core.py."""
         test_code = f'''
     def test_mcp_{name}_ping(self):
-        """MCP-сервер {name} отвечает на ping."""
-        from mcp_server_{name} import ping
+        # MCP-сервер {name} отвечает на ping
+        from mcp_servers.{name}.tools import ping
         result = ping()
         self.assertEqual(result, "pong")
 '''

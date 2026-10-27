@@ -1,41 +1,20 @@
 # -*- coding: utf-8 -*-
-# mcp_server_filesystem.py — MCP-сервер для операций с файловой системой
+# mcp_servers/filesystem/tools.py — Инструменты filesystem-сервера
 #
-# Фаза 3.3: Filesystem MCP-сервер на FastMCP.
-# Предоставляет инструменты: read, write, list_dir, search, stat.
-#
-# Запуск:
-#     python -m mcp_server_filesystem  # stdio (по умолчанию)
-#     python mcp_server_filesystem.py --transport sse --port 3100
+# 6 инструментов:
+#   - read_file       — чтение диапазона строк из файла
+#   - write_file      — запись содержимого в файл (полная перезапись)
+#   - list_dir        — содержимое папки
+#   - search_files    — поиск файлов по glob-паттерну
+#   - stat_file       — информация о файле/папке
+#   - grep_code       — поиск по содержимому файлов (grep)
 
 import os
 import re
 import fnmatch
-import argparse
-from typing import Optional
 
-from fastmcp import FastMCP
-
-# Создаём сервер
-mcp = FastMCP(
-    "filesystem-server",
-    instructions="Filesystem operations: read, write, list, search, stat",
-    version="1.0.0",
-)
-
-# ──────────────────────────────────────────────
-# Вспомогательные функции
-# ──────────────────────────────────────────────
-
-
-def _should_skip_dir(dirname: str) -> bool:
-    """Проверить, нужно ли пропустить директорию при обходе."""
-    return dirname in ("venv", ".git", "__pycache__", ".pytest_cache", "node_modules")
-
-
-# ──────────────────────────────────────────────
-# Инструменты
-# ──────────────────────────────────────────────
+from mcp_servers.filesystem.server import mcp
+from mcp_servers.filesystem.helpers import should_skip_dir
 
 
 @mcp.tool()
@@ -57,7 +36,10 @@ def read_file(file_path: str, start_line: int = 1, end_line: int = 0) -> str:
                     break
                 lines.append(f"{i}: {line.rstrip()}")
         if not lines:
-            return f"[пусто] Файл {file_path} не содержит строк в диапазоне {start_line}-{end_line}"
+            return (
+                f"[пусто] Файл {file_path} не содержит строк "
+                f"в диапазоне {start_line}-{end_line}"
+            )
         return "\n".join(lines)
     except FileNotFoundError:
         return f"Ошибка: файл '{file_path}' не найден"
@@ -119,7 +101,7 @@ def search_files(pattern: str, path: str = ".", file_pattern: str = "*") -> str:
     """
     results = []
     for root, dirs, files in os.walk(path):
-        dirs[:] = [d for d in dirs if not _should_skip_dir(d)]
+        dirs[:] = [d for d in dirs if not should_skip_dir(d)]
         for f in files:
             if not fnmatch.fnmatch(f, pattern):
                 continue
@@ -141,6 +123,7 @@ def stat_file(file_path: str) -> str:
     """
     try:
         st = os.stat(file_path)
+        import datetime
         info = []
         if os.path.isdir(file_path):
             info.append(f"📁 Папка: {file_path}")
@@ -149,9 +132,12 @@ def stat_file(file_path: str) -> str:
         else:
             info.append(f"🔗 {file_path}")
         info.append(f"Размер: {st.st_size} B")
-        import datetime
-        info.append(f"Изменён: {datetime.datetime.fromtimestamp(st.st_mtime).isoformat()}")
-        info.append(f"Создан: {datetime.datetime.fromtimestamp(st.st_ctime).isoformat()}")
+        info.append(
+            f"Изменён: {datetime.datetime.fromtimestamp(st.st_mtime).isoformat()}"
+        )
+        info.append(
+            f"Создан: {datetime.datetime.fromtimestamp(st.st_ctime).isoformat()}"
+        )
         return "\n".join(info)
     except Exception as e:
         return f"Ошибка: {e}"
@@ -173,7 +159,7 @@ def grep_code(pattern: str, path: str = ".", file_pattern: str = "*.py") -> str:
         return f"Ошибка в регулярном выражении: {e}"
 
     for root, dirs, files in os.walk(path):
-        dirs[:] = [d for d in dirs if not _should_skip_dir(d)]
+        dirs[:] = [d for d in dirs if not should_skip_dir(d)]
         for f in files:
             if not fnmatch.fnmatch(f, file_pattern):
                 continue
@@ -193,25 +179,3 @@ def grep_code(pattern: str, path: str = ".", file_pattern: str = "*.py") -> str:
     if len(results) > 100:
         output += f"\n... и ещё {len(results) - 100} совпадений"
     return output
-
-
-# ──────────────────────────────────────────────
-# Точка входа
-# ──────────────────────────────────────────────
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Filesystem MCP Server")
-    parser.add_argument("--transport", choices=["stdio", "sse"], default="stdio")
-    parser.add_argument("--port", type=int, default=3100)
-    parser.add_argument("--host", default="127.0.0.1")
-    args = parser.parse_args()
-
-    if args.transport == "sse":
-        mcp.run(transport="sse", host=args.host, port=args.port)
-    else:
-        mcp.run(transport="stdio")
-
-
-if __name__ == "__main__":
-    main()

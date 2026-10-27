@@ -175,7 +175,7 @@ def get_zone_for_file(filepath: str) -> Optional[str]:
     # Autonomous
     autonomous_prefixes = [
         "core_tools.py", "agents/", "modules/", "prompts/",
-        "prompts.json", "mcp_server_",
+        "prompts.json", "mcp_server_", "mcp_servers/",
     ]
     for prefix in autonomous_prefixes:
         if filepath.startswith(prefix) or filepath == prefix:
