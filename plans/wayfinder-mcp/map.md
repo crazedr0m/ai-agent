@@ -19,6 +19,11 @@
 
 <!-- the index: one line per closed ticket -->
 
+- **G1** (Архитектура анализатора): Python-only v1, 4 инструмента (scan_project, query_function, callers, callees), JSON-формат графа {nodes, edges}, кэширование AST. Реализовано в mcp_servers/code_analyzer/.
+- **G2** (LOG16 v1 API): MemoryNode с recalculate_band(log16), write/query/equalize, status resource, keyword match (без эмбеддингов в v1). Реализовано в mcp_servers/substrate/.
+- **G3** (Сценарии использования): code_analyzer — для map репозитория (Фаза 6.1); substrate — долговременная память между сессиями и equalize по расписанию.
+- **G4** (Интеграция): mcp_servers.json — stdio transport; MCPManager регистрирует инструменты с префиксом (code_analyzer__scan_project, substrate__write_to_substrate); graceful degradation.
+
 ## Tickets
 
 ### Research (AFK — можно запускать параллельно)

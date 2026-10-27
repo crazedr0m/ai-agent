@@ -13,6 +13,20 @@
       "args": ["-m", "mcp_servers.fetch"],
       "description": "Web fetch and HTML-to-markdown conversion",
       "timeout": 30
+    },
+    "code_analyzer": {
+      "transport": "stdio",
+      "command": "python",
+      "args": ["-m", "mcp_servers.code_analyzer"],
+      "description": "Static code analysis: scan projects, query symbols, build call graphs (Tree-sitter)",
+      "timeout": 60
+    },
+    "substrate": {
+      "transport": "stdio",
+      "command": "python",
+      "args": ["-m", "mcp_servers.substrate"],
+      "description": "LOG16 associative memory: write/query/equalize facts, status resource",
+      "timeout": 30
     }
   }
 }

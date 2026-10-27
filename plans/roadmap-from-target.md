@@ -87,12 +87,12 @@
 
 Критерий готовности: агент по собственной ретроспективе предлагает и применяет патч (например, правку парсера), прошедший гейт, а регрессия откатывается автоматически. ✅ 54 теста проходят (`python test_core.py` → `OK`).
 
-### Фаза 5 — Собственные MCP и «Субстрат»
+### Фаза 5 — Собственные MCP и «Субстрат» ✅
 
-- [ ] 5.1 Закрыть тикеты `plans/wayfinder-mcp/` (R1–R3 → G1–G4).
-- [ ] 5.2 MCP-сервер статического анализатора (Tree-sitter, Python-only v1): символы, сигнатуры, граф вызовов, зависимости.
-- [ ] 5.3 MCP-сервер LOG16 v1: `write`/`query`/`equalize` + status resource, JSON + Markdown.
-- [ ] 5.4 Шаблон и инструмент генерации MCP-серверов агентом (FastMCP) с обязательным тестом и прогоном через гейт Фазы 4.
+- [x] 5.1 Закрыть тикеты `plans/wayfinder-mcp/` (R1–R3 → G1–G4). Все исследования (R1–R3) были resolved, G-тикеты закрыты решениями: G1 (анализатор: 4 инструмента, Python v1), G2 (LOG16 v1: write/query/equalize + status), G3 (сценарии: map репозитория + долговременная память), G4 (интеграция: stdio через mcp_servers.json + MCPManager).
+- [x] 5.2 MCP-сервер статического анализатора (Tree-sitter, Python-only v1): `scan_project`, `query_function`, `query_callers`, `query_callees`, кэш AST, граф вызовов, сигнатуры с type hints. ✅ `mcp_servers/code_analyzer/` (4 файла), 10 тестов.
+- [x] 5.3 MCP-сервер LOG16 v1: `write_to_substrate`/`query_substrate`/`equalize_memory` + `substrate://status`, MemoryNode, log16-формула распределения band, 3 стратегии поиска (Core всегда + keyword match + топ-3 Spike). ✅ `mcp_servers/substrate/` (4 файла), 8 тестов.
+- [x] 5.4 Шаблон и инструмент генерации MCP-серверов агентом (FastMCP) с обязательным тестом и прогоном через гейт Фазы 4. ✅ `modules/scaffold.py` — `create_mcp_server()` существовал и работает, генерирует modular-архитектуру (`__init__.py` + `server.py` + `tools.py` + тест).
 
 ### Фаза 6 — Рефакторинг больших проектов
 
