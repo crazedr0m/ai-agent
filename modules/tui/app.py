@@ -1,26 +1,28 @@
 # -*- coding: utf-8 -*-
-"""TUIApp — основной класс приложения с event loop (Фаза 2)."""
+"""TUIApp — основной класс приложения с event loop (Фаза 2).
+
+Рендеринг делегирован Renderer (modules/tui/renderer.py).
+В этом файле: состояние, event loop, обработчики.
+"""
 
 import os
 import sys
 import json
 from typing import Optional, Callable
 from datetime import datetime
+
 from rich.console import Console
 from rich.live import Live
-from rich.panel import Panel
-from rich.layout import Layout
-from rich.text import Text
-from rich import box
 import curses
 
-from .components import get_file_icon
+from .renderer import Renderer
 
 
 class TUIApp:
     """TUI Application — основной класс приложения.
 
     Фаза 2: поддержка интеграции с CasualAgent, сессии, трейсинг.
+    Рендеринг через Renderer.
     """
 
     HOTKEYS = {
@@ -38,6 +40,7 @@ class TUIApp:
         self.width = width
         self.height = height
         self.console = Console()
+        self.renderer = Renderer()
 
         # Чат история
         self.chat_history: list[tuple[str, str]] = []
@@ -92,14 +95,15 @@ class TUIApp:
                         break
 
                     try:
-                        action, description = self.HOTKEYS.get(chr(key).lower(), (None, None))
+                        action, description = self.HOTKEYS.get(
+                            chr(key).lower(), (None, None))
                     except (ValueError, KeyError):
                         action = None
 
                     if action:
-                        core_func = getattr(self, f"_on_{action}", None)
-                        if core_func:
-                            core_func()
+                        handler = getattr(self, f"_on_{action}", None)
+                        if handler:
+                            handler()
 
         except KeyboardInterrupt:
             pass
@@ -109,105 +113,25 @@ class TUIApp:
                 self._tracer.close()
 
     def _render(self):
-        """Рендеринг UI."""
-        chat_content = self._render_chat()
-
-        tasks_panel_str = ""
-        if self.show_tasks and self.tasks:
-            tasks_lines = []
-            for task_id, task in sorted(self.tasks.items()):
-                status_icon = {
-                    "pending": "[yellow]⏳[/yellow]",
-                    "running": "[bold green]▶️[/bold green]",
-                    "completed": "[green]✅[/green]",
-                    "failed": "[red]❌[/red]",
-                    "retrying": "[orange]🔄[/orange]",
-                }.get(task.get("status", "pending"), "[?]")
-                tasks_lines.append(f"{task_id}: {status_icon} {task.get('name', 'Unnamed task')}")
-            if tasks_lines:
-                tasks_panel_str = "\n".join(tasks_lines)
-
-        files_panel_str = ""
-        if self.show_files and self.project_files:
-            folders = {}
-            for f in self.project_files:
-                path = f.get("path", "")
-                name = os.path.basename(path)
-                folder = os.path.dirname(path).split(os.sep)[-1] or "root"
-                if folder not in folders:
-                    folders[folder] = []
-                folders[folder].append(name)
-
-            files_lines = []
-            for folder, files_list in sorted(folders.items()):
-                files_lines.append(f"[cyan]{folder}[/cyan]:")
-                for f_name in files_list[:10]:
-                    icon = get_file_icon(f_name)
-                    files_lines.append(f"  {icon} {f_name}")
-                if len(files_list) > 10:
-                    files_lines.append(f"  ... и ещё {len(files_list) - 10} файлов")
-            if files_lines:
-                files_panel_str = "\n".join(files_lines)
-
-        status_bar = self._render_status()
-
-        output_parts = [chat_content]
-        if tasks_panel_str:
-            output_parts.append(f"[bold yellow]📋 ЗАДАЧИ[/bold yellow]\n{tasks_panel_str}")
-        if files_panel_str:
-            output_parts.append(f"[bold cyan]📁 ФАЙЛЫ[/bold cyan]\n{files_panel_str}")
-
-        # Фаза 2: показываем ID сессии
-        session_info = ""
-        if self._session_id:
-            session_info = f"\n[dim]Сессия: {self._session_id}[/dim]"
-
-        return Panel(
-            "\n".join(output_parts) + session_info,
-            title="[bold blue]🤖 AUTONOMOUS AI SOFTWARE ENGINEER[/bold blue]",
-            border_style="blue",
-            box=box.ROUNDED,
+        """Делегирует рендеринг Renderer."""
+        return self.renderer.render(
+            chat_history=self.chat_history,
+            tasks=self.tasks,
+            project_files=self.project_files,
+            status_messages=self.status_messages,
+            show_tasks=self.show_tasks,
+            show_files=self.show_files,
+            session_id=self._session_id,
         )
 
     def _build_ui(self):
-        """Alias for _render() — сохранение обратной совместимости."""
+        """Alias for _render() — обратная совместимость."""
         return self._render()
 
-    def _render_chat(self):
-        """Рендеринг чата."""
-        if not self.chat_history:
-            return "[dim]Чат пуст. Нажмите [cyan]'c'[/cyan] для отправки сообщения.[/dim]"
-
-        lines = []
-        for msg in reversed(self.chat_history[-50:]):
-            role, content = msg
-            if role == "user":
-                prefix = "[green][bold]>[/bold][/green] Пользователь"
-            elif role == "ai":
-                prefix = "[red][bold]<[/bold][/red] AI-Агент"
-            else:
-                prefix = "[dim]⚙️ Система[/dim]"
-            lines.append(f"{prefix}\n{content}")
-
-        return "\n\n".join(lines)
-
-    def _render_status(self):
-        """Рендеринг статус бара."""
-        total = len([t for t in self.tasks.values() if t.get("status") != "completed"])
-        completed = len([t for t in self.tasks.values() if t.get("status") == "completed"])
-
-        status_lines = [
-            f"[dim]Задачи: {total} в работе, {completed} завершено[/dim]",
-            f"[dim]Чат: {len(self.chat_history)} сообщений[/dim]",
-        ]
-
-        for timestamp, message in self.status_messages[-3:]:
-            status_lines.append(f"[dim]{timestamp}: {message}[/dim]")
-
-        return "\n".join(status_lines)
+    # ─── Обработчики событий ───────────────────────────────────────────
 
     def _on_quit(self):
-        """Обработчик выхода."""
+        """Выход."""
         if self._tracer:
             self._tracer.close()
         print("\nВыход из приложения...")
@@ -217,7 +141,6 @@ class TUIApp:
         """Создание новой задачи."""
         self.task_counter += 1
         task_id = f"task_{self.task_counter}"
-
         self.tasks[task_id] = {
             "id": task_id,
             "name": f"Новая задача #{self.task_counter}",
@@ -277,7 +200,9 @@ class TUIApp:
 
         # Фаза 2: если есть агент — обрабатываем через него
         if self._agent:
-            self.status_messages.insert(0, (datetime.now().strftime("%H:%M"), "🤔 Агент думает..."))
+            self.status_messages.insert(
+                0, (datetime.now().strftime("%H:%M"),
+                    "\U0001f914 Агент думает..."))
 
             # Временно выходим из curses для вывода агента
             curses.endwin()
@@ -288,14 +213,16 @@ class TUIApp:
                     on_message=self.add_chat_message
                 )
             except Exception as e:
-                self.add_chat_message("system", f"❌ Ошибка: {e}")
+                self.add_chat_message("system", f"\u274c Ошибка: {e}")
             finally:
                 # Возвращаем curses
                 self.stdscr = curses.initscr()
                 curses.curs_set(0)
                 self.stdscr.timeout(100)
 
-            self.status_messages.insert(0, (datetime.now().strftime("%H:%M"), "✅ Ответ получен"))
+            self.status_messages.insert(
+                0, (datetime.now().strftime("%H:%M"),
+                    "\u2705 Ответ получен"))
         else:
             # Без агента — просто echo
             self.chat_history.append(("ai", f"Эхо: {message}"))
@@ -310,7 +237,8 @@ class TUIApp:
 
     def _on_update(self):
         """Обновление статуса."""
-        self.status_messages.insert(0, (datetime.now().strftime("%H:%M"), "Статус обновлён"))
+        self.status_messages.insert(
+            0, (datetime.now().strftime("%H:%M"), "Статус обновлён"))
 
     def _on_help(self):
         """Отображение помощи."""
@@ -326,16 +254,16 @@ class TUIApp:
             "  s — Сохранить сессию",
             "  h — Эта помощь",
         ]
-
         self.console.print("\n".join(help_text))
 
     def _on_save_session(self):
         """Сохранить сессию (2.4)."""
         if not self._session_id:
-            self.status_messages.insert(0, (datetime.now().strftime("%H:%M"), "⚠️ Нет активной сессии"))
+            self.status_messages.insert(
+                0, (datetime.now().strftime("%H:%M"),
+                    "\u26a0\ufe0f Нет активной сессии"))
             return
 
-        # Сохраняем историю чата в JSON
         session_data = {
             "session_id": self._session_id,
             "timestamp": datetime.now().isoformat(),
@@ -347,14 +275,18 @@ class TUIApp:
         with open(session_file, "w", encoding="utf-8") as f:
             json.dump(session_data, f, indent=2, ensure_ascii=False)
 
-        self.status_messages.insert(0,
-            (datetime.now().strftime("%H:%M"), f"💾 Сессия сохранена: {session_file}"))
+        self.status_messages.insert(
+            0, (datetime.now().strftime("%H:%M"),
+                f"\U0001f4be Сессия сохранена: {session_file}"))
+
+    # ─── Публичные методы для агента ───────────────────────────────────
 
     def add_chat_message(self, role: str, content: str):
         """Добавить сообщение в чат."""
         self.chat_history.append((role, content))
 
-    def update_task_status(self, task_id: str, status: str, name: str = None, progress: float = 0):
+    def update_task_status(self, task_id: str, status: str,
+                           name: str = None, progress: float = 0):
         """Обновить статус задачи."""
         if task_id not in self.tasks:
             self.task_counter += 1

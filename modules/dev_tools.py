@@ -11,10 +11,7 @@
 # - git_diff        — git diff (свободно)
 # - git_commit      — git commit (с подтверждением)
 #
-# Система разрешений (2.3):
-# - read: свободно
-# - write: подтверждение (permit/deny)
-# - dangerous: подтверждение + лог
+# Система разрешений вынесена в modules/permissions.py
 
 import os
 import re
@@ -23,96 +20,7 @@ import sys
 from typing import Optional
 
 from core.core_tools import register_tool
-
-# ──────────────────────────────────────────────
-# Система разрешений (2.3)
-# ──────────────────────────────────────────────
-
-_PERMISSION_LEVELS = {
-    "read": "free",       # чтение — свободно
-    "write": "confirm",   # запись — с подтверждением
-    "dangerous": "confirm",  # опасные операции — с подтверждением
-}
-
-
-def set_permission_level(category: str, level: str):
-    """Изменить уровень разрешения для категории."""
-    if category in _PERMISSION_LEVELS:
-        _PERMISSION_LEVELS[category] = level
-
-
-def get_permission_level(category: str) -> str:
-    """Получить уровень разрешения для категории."""
-    return _PERMISSION_LEVELS.get(category, "confirm")
-
-
-def _confirm_action(description: str, category: str = "write") -> bool:
-    """Запросить подтверждение у пользователя.
-
-    Возвращает True если разрешено, False если запрещено.
-    """
-    level = get_permission_level(category)
-
-    if level == "free":
-        return True
-
-    if level == "deny":
-        from rich.console import Console
-        Console().print(f"[red]🚫 Заблокировано: {description}[/red]")
-        return False
-
-    # confirm — спрашиваем пользователя
-    from rich.console import Console
-    console = Console()
-
-    console.print(f"\n[yellow]🔐 Разрешение: {description}[/yellow]")
-    console.print("[dim]Разрешить? (y/n, всегда для сессии — Y/N)[/dim]")
-
-    try:
-        import curses
-        stdscr = curses.initscr()
-        curses.curs_set(1)
-        stdscr.addstr(0, 0, f"Разрешить? (y/n, Y/N): ".ljust(80))
-        stdscr.refresh()
-
-        response = ""
-        while True:
-            key = stdscr.getch()
-            if key in [ord('y'), ord('Y'), ord('n'), ord('N'), 10, 13, 27]:
-                if key == 27:  # ESC
-                    response = "n"
-                    break
-                elif key in [10, 13]:  # Enter
-                    if response:
-                        break
-                else:
-                    response = chr(key)
-                    break
-            elif key == curses.KEY_BACKSPACE or key == 127:
-                response = ""
-                stdscr.move(0, 0)
-                stdscr.clrtoe()
-                stdscr.addstr(0, 0, f"Разрешить? (y/n, Y/N): ".ljust(80))
-                stdscr.refresh()
-
-        curses.endwin()
-    except Exception:
-        # fallback на консольный ввод
-        response = input("Разрешить? (y/n, Y/N): ").strip().lower()
-
-    if response == 'Y':
-        # Всегда для сессии
-        set_permission_level(category, "free")
-        console.print(f"[green]✅ {category}: разрешено на сессию[/green]")
-        return True
-    elif response == 'y':
-        return True
-    elif response == 'N':
-        set_permission_level(category, "deny")
-        console.print(f"[red]🚫 {category}: заблокировано на сессию[/red]")
-        return False
-    else:
-        return False
+from modules.permissions import confirm_action
 
 
 # ──────────────────────────────────────────────
@@ -155,7 +63,7 @@ def write_file(file_path: str, content: str) -> str:
         file_path: путь к файлу
         content: новое содержимое файла
     """
-    if not _confirm_action(f"Запись файла: {file_path} ({len(content)} символов)"):
+    if not confirm_action(f"Запись файла: {file_path} ({len(content)} символов)"):
         return "❌ Операция отклонена пользователем"
 
     try:
@@ -176,7 +84,7 @@ def apply_diff(file_path: str, old_string: str, new_string: str) -> str:
         old_string: строка для замены (должна точно совпадать)
         new_string: новая строка
     """
-    if not _confirm_action(f"Изменение файла: {file_path}"):
+    if not confirm_action(f"Изменение файла: {file_path}"):
         return "❌ Операция отклонена пользователем"
 
     try:
@@ -267,7 +175,7 @@ def run_command(command: str, timeout: int = 60) -> str:
         command: команда для выполнения
         timeout: таймаут в секундах (по умолчанию 60)
     """
-    if not _confirm_action(f"Запуск команды: {command}", category="dangerous"):
+    if not confirm_action(f"Запуск команды: {command}", category="dangerous"):
         return "❌ Операция отклонена пользователем"
 
     try:
@@ -299,9 +207,6 @@ def git_status() -> str:
             ["git", "status", "--short"],
             capture_output=True, text=True, timeout=10
         )
-        if result.returncode != 0:
-            return "Не git-репозиторий или git недоступен"
-
         branch_result = subprocess.run(
             ["git", "branch", "--show-current"],
             capture_output=True, text=True, timeout=5
@@ -350,7 +255,7 @@ def git_commit(message: str, add_all: bool = True) -> str:
         message: сообщение коммита
         add_all: добавить все изменения (git add -A)
     """
-    if not _confirm_action(f"Git commit: {message[:80]}", category="dangerous"):
+    if not confirm_action(f"Git commit: {message[:80]}", category="dangerous"):
         return "❌ Операция отклонена пользователем"
 
     try:
