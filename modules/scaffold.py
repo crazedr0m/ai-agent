@@ -262,89 +262,86 @@ def ping() -> str:
     # ─────────────────────────────────────────────
 
     def _create_tool_test(self, name: str, filename: str):
-        """Добавить тест для нового инструмента в test_core.py."""
-        test_code = f'''
-    def test_{name}(self):
-        # {name} возвращает результат
-        import {name.replace(".py", "")}
-        result = {name.replace(".py", "")}.{name}("test")
-        self.assertIn("executed", result)
-'''
-        self._append_to_test_file(test_code)
+        """Создать tests/test_<name>.py для нового инструмента."""
+        test_code = (
+            f'# -*- coding: utf-8 -*-\n'
+            f'# tests/test_{name}.py — Тест для инструмента {name}\n'
+            f'\n'
+            f'import unittest\n'
+            f'from core.core_tools import get_tool\n'
+            f'\n'
+            f'\n'
+            f'class Test{name.capitalize()}(unittest.TestCase):\n'
+            f'    """Тесты для инструмента {name}."""\n'
+            f'\n'
+            f'    def test_{name}_executes(self):\n'
+            f'        """{name} возвращает результат."""\n'
+            f'        tool = get_tool("{name}")\n'
+            f'        self.assertIsNotNone(tool)\n'
+            f'        result = tool("test")\n'
+            f'        self.assertIn("executed", result)\n'
+            f'\n'
+            f'\n'
+            f'if __name__ == "__main__":\n'
+            f'    unittest.main()\n'
+        )
+        test_path = os.path.join(self.repo_path, "tests", f"test_{name}.py")
+        os.makedirs(os.path.dirname(test_path), exist_ok=True)
+        with open(test_path, "w", encoding="utf-8") as f:
+            f.write(test_code)
 
     def _create_module_test(self, name: str, filename: str):
-        """Добавить тест для нового модуля в test_core.py."""
-        test_code = f'''
-    def test_{name}(self):
-        # {name} запускается без ошибок
-        from modules.{name} import {name.capitalize()}
-        instance = {name.capitalize()}()
-        result = instance.run()
-        self.assertIn("executed", result)
-'''
-        self._append_to_test_file(test_code)
+        """Создать tests/test_<name>.py для нового модуля."""
+        class_name = name.capitalize()
+        test_code = (
+            f'# -*- coding: utf-8 -*-\n'
+            f'# tests/test_{name}.py — Тест для модуля {name}\n'
+            f'\n'
+            f'import unittest\n'
+            f'from modules.{name} import {class_name}\n'
+            f'\n'
+            f'\n'
+            f'class Test{class_name}(unittest.TestCase):\n'
+            f'    """Тесты для модуля {name}."""\n'
+            f'\n'
+            f'    def test_{name}_runs(self):\n'
+            f'        """{name} запускается без ошибок."""\n'
+            f'        instance = {class_name}()\n'
+            f'        result = instance.run()\n'
+            f'        self.assertIn("executed", result)\n'
+            f'\n'
+            f'\n'
+            f'if __name__ == "__main__":\n'
+            f'    unittest.main()\n'
+        )
+        test_path = os.path.join(self.repo_path, "tests", f"test_{name}.py")
+        os.makedirs(os.path.dirname(test_path), exist_ok=True)
+        with open(test_path, "w", encoding="utf-8") as f:
+            f.write(test_code)
 
     def _create_mcp_test(self, name: str, filename: str):
-        """Добавить тест для нового MCP-сервера в test_core.py."""
-        test_code = f'''
-    def test_mcp_{name}_ping(self):
-        # MCP-сервер {name} отвечает на ping
-        from mcp_servers.{name}.tools import ping
-        result = ping()
-        self.assertEqual(result, "pong")
-'''
-        self._append_to_test_file(test_code)
-
-    def _append_to_test_file(self, test_code: str):
-        """Добавить тест в test_core.py перед if __name__."""
-        test_path = os.path.join(self.repo_path, "test_core.py")
-        if not os.path.exists(test_path):
-            return
-
-        with open(test_path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        # Вставляем перед последним классом или перед if __name__
-        marker = 'if __name__ == "__main__":'
-        if marker in content:
-            # Вставляем тест в последний тестовый класс
-            # Ищем последний class ...Test
-            import re
-            classes = list(re.finditer(r'^class (\w+Test|Test\w+)', content, re.MULTILINE))
-            if classes:
-                last_class = classes[-1]
-                # Ищем конец последнего метода в этом классе
-                class_end = self._find_method_end(content, last_class.end())
-                insert_pos = class_end
-                content = (
-                    content[:insert_pos] +
-                    test_code +
-                    content[insert_pos:]
-                )
-            else:
-                # Вставляем перед if __name__
-                insert_pos = content.index(marker)
-                content = (
-                    content[:insert_pos] +
-                    "\n\n" + test_code + "\n" +
-                    content[insert_pos:]
-                )
-        else:
-            content += "\n" + test_code
-
+        """Создать tests/test_mcp_<name>.py для нового MCP-сервера."""
+        test_code = (
+            f'# -*- coding: utf-8 -*-\n'
+            f'# tests/test_mcp_{name}.py — Тест для MCP-сервера {name}\n'
+            f'\n'
+            f'import unittest\n'
+            f'from mcp_servers.{name}.tools import ping\n'
+            f'\n'
+            f'\n'
+            f'class TestMCP{name.capitalize()}(unittest.TestCase):\n'
+            f'    """Тесты для MCP-сервера {name}."""\n'
+            f'\n'
+            f'    def test_mcp_{name}_ping(self):\n'
+            f'        """MCP-сервер {name} отвечает на ping."""\n'
+            f'        result = ping()\n'
+            f'        self.assertEqual(result, "pong")\n'
+            f'\n'
+            f'\n'
+            f'if __name__ == "__main__":\n'
+            f'    unittest.main()\n'
+        )
+        test_path = os.path.join(self.repo_path, "tests", f"test_mcp_{name}.py")
+        os.makedirs(os.path.dirname(test_path), exist_ok=True)
         with open(test_path, "w", encoding="utf-8") as f:
-            f.write(content)
-
-    def _find_method_end(self, content: str, start: int) -> int:
-        """Найти конец последнего метода в классе."""
-        lines = content[start:].split("\n")
-        last_def = -1
-        for i, line in enumerate(lines):
-            if line.strip().startswith("def "):
-                last_def = i
-        if last_def >= 0:
-            # Ищем следующую пустую строку после последнего def
-            for i in range(last_def + 1, len(lines)):
-                if not lines[i].strip() and i > last_def + 1:
-                    return start + sum(len(l) + 1 for l in lines[:i])
-        return len(content)
+            f.write(test_code)

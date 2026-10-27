@@ -132,17 +132,20 @@ python -m modules.tui.example
 
 Тесты написаны на `unittest` и запускаются строго через `subprocess.run()` — критерий успеха только `returncode == 0`.
 
+Тесты разбиты по доменам в пакете [`tests/`](tests/). Корневой раннер [`test_core.py`](test_core.py) запускает их все через `unittest discover`.
+
 ```bash
 # Все тесты
-python -m unittest discover -v
-
-# Отдельные файлы
-python -m unittest test_core -v
-python -m unittest test_app -v
-
-# Либо напрямую
 python test_core.py
-python test_app.py
+
+# Или через unittest discover
+python -m unittest discover tests -v
+
+# Отдельные тестовые модули
+python -m unittest tests.test_base_agent -v
+python -m unittest tests.test_tracer -v
+python -m unittest tests.test_gate -v
+python -m unittest tests.test_scaffold -v
 ```
 
 ---
