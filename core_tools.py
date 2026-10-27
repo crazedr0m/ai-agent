@@ -3,11 +3,16 @@
 #
 # Все инструменты зарегистрированы через @register_tool из core.core_tools.
 # Старая TOOLS_MAP удалена — реестр теперь в _GLOBAL_REGISTRY.
+#
+# Фаза 2: добавлены инструменты разработчика из modules/dev_tools.py
 
 import os
 import sqlite3
 
 from core.core_tools import register_tool
+
+# Регистрируем инструменты разработчика (Фаза 2)
+import modules.dev_tools  # noqa: F401 — регистрация через @register_tool
 
 
 @register_tool("list_dir", "Показать содержимое папки")

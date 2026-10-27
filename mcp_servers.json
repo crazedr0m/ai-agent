@@ -1,0 +1,18 @@
+{
+  "servers": {
+    "filesystem": {
+      "transport": "stdio",
+      "command": "python",
+      "args": ["mcp_server_filesystem.py"],
+      "description": "Filesystem operations (read, write, list, search, stat)",
+      "timeout": 30
+    },
+    "fetch": {
+      "transport": "stdio",
+      "command": "python",
+      "args": ["mcp_server_fetch.py"],
+      "description": "Web fetch and HTML-to-markdown conversion",
+      "timeout": 30
+    }
+  }
+}

@@ -3,6 +3,8 @@
 #
 # Минимальный ReAct-агент для вопросов по коду:
 # read_file, list_dir, search, view_file_outline
+#
+# Фаза 2: принимает model и tracer, интегрирован с TUI
 
 import core
 from core import BaseAgent
@@ -27,11 +29,15 @@ class CasualAgent(BaseAgent):
     """
     CasualAgent — базовый ReAct-ассистент для вопросов по коду.
 
-    Использует инструменты: list_dir, view_file_outline, read_file_chunk
+    Использует инструменты: list_dir, view_file_outline, read_file_chunk,
+    search_code, git_status, git_diff
     """
 
-    def __init__(self):
-        super().__init__(name="casual_agent", max_steps=15)
+    def __init__(self, model: str = "qwen2.5-coder:14b",
+                 tracer=None, name: str = "casual_agent",
+                 max_steps: int = 15):
+        super().__init__(name=name, max_steps=max_steps, model=model)
+        self.tracer = tracer
 
     def run(self, user_query: str = "") -> str:
         """Точка входа: отвечает на вопрос пользователя."""
@@ -43,5 +49,37 @@ class CasualAgent(BaseAgent):
 
         core.console.print(f"[green]🤖 CasualAgent: {user_query[:100]}...[/green]")
 
+        if self.tracer:
+            self.tracer.log_llm_call(system_prompt[:500], model=self.model)
+
         result = self.run_react(system_prompt, user_query)
+
+        if self.tracer:
+            self.tracer.log_final(result[:500])
+
+        return result
+
+    def run_interactive(self, user_query: str,
+                        on_message=None) -> str:
+        """Интерактивный запуск с callback для сообщений."""
+        if not user_query:
+            return ""
+
+        tools_help = self.tool_registry.list_tools()
+        system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(tools_help=tools_help)
+
+        if on_message:
+            on_message("system", "🤔 Думаю...")
+
+        if self.tracer:
+            self.tracer.log_llm_call(system_prompt[:500], model=self.model)
+
+        result = self.run_react(system_prompt, user_query)
+
+        if self.tracer:
+            self.tracer.log_final(result[:500])
+
+        if on_message:
+            on_message("ai", result)
+
         return result

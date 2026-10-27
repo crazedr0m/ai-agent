@@ -6,6 +6,7 @@ modern_src
 tasks.json
 data.db
 shared_context.json
+traces/
 
 .env
 .aider*

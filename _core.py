@@ -104,6 +104,18 @@ def run_isolated_tests(test_file: str) -> tuple[bool, str]:
     return False, error_log
 
 def hot_reload():
-    """Выполняет горячую перезагрузку процесса в памяти."""
-    console.print("[bold yellow]🔄 Выполняется горячая перезагрузка архитектуры ядра...[/bold yellow]\n")
-    os.execv(sys.executable, [sys.executable] + sys.argv)
+    """Выполняет горячую перезагрузку модулей изменяемой зоны.
+
+    Вместо os.execv (перезапуск всего процесса) использует точечную
+    перезагрузку autonomous-модулей через modules.hot_reload.
+    """
+    from modules.hot_reload import reload_all_autonomous, reload_all_supervised
+    console.print("[bold yellow]🔄 Горячая перезагрузка autonomous-модулей...[/bold yellow]\n")
+    results = reload_all_autonomous()
+    success = sum(1 for v in results.values() if v)
+    failed = sum(1 for v in results.values() if not v)
+    console.print(f"[green]✅ Перезагружено: {success} модулей[/green]")
+    if failed:
+        console.print(f"[yellow]⚠️ Не удалось перезагрузить: {failed} модулей[/yellow]")
+    # Supervised-модули требуют подтверждения — только логируем
+    console.print("[dim]Supervised-модули не перегружаются без подтверждения человека.[/dim]")

@@ -50,6 +50,8 @@ class MigrationAgent(BaseAgent):
         self.shared_context_path = "shared_context.json"
         # ✅ Улучшение №4: Инициализация RetrySystem
         self.retry_system = RetrySystem(self.manifest_path)
+        # ✅ Фаза 2: регистрируем инструменты при создании
+        import core_tools  # noqa: F401
 
     # ─────────────────────────────────────────────
     # run() — точка входа
