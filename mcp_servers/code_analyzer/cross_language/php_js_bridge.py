@@ -67,6 +67,90 @@ def _extract_js_symbols_from_text(js_text: str) -> dict:
     }
 
 
+# ── Кэш файлов и индекс символов ────────────────────────────────────
+
+_js_file_cache: dict[str, list[str]] = {}  # project_path -> [filepath, ...]
+_js_symbol_index: dict[str, dict[str, list[dict]]] = {}  # project_path -> {symbol_name -> [{file, language, signature}, ...]}
+_last_project_path: str | None = None
+
+
+def _is_minified(filename: str) -> bool:
+    """Проверить, является ли файл минифицированным (.min.js, .min.ts)."""
+    return ".min." in filename
+
+
+def _build_js_file_list(project_path: str) -> list[str]:
+    """Собрать все .js/.ts/.jsx/.tsx файлы проекта (с кэшированием)."""
+    global _last_project_path
+    if _last_project_path != project_path:
+        _js_file_cache.clear()
+        _js_symbol_index.clear()
+        _last_project_path = project_path
+
+    cache_key = f"{project_path}"
+    if cache_key in _js_file_cache:
+        return _js_file_cache[cache_key]
+
+    files = []
+    for lang in ("javascript", "typescript"):
+        ext = ".js" if lang == "javascript" else ".ts"
+        jsx_exts = [".jsx", ".tsx"] if lang == "typescript" else [".jsx"]
+
+        lang_files = _get_all_files(project_path, extension=ext)
+        lang_files = [f for f in lang_files if not _is_minified(f)]
+        files.extend((f, lang) for f in lang_files)
+
+        for jsx_ext in jsx_exts:
+            xfiles = _get_all_files(project_path, extension=jsx_ext)
+            xfiles = [f for f in xfiles if not _is_minified(f)]
+            files.extend((f, lang) for f in xfiles)
+
+    _js_file_cache[cache_key] = files
+    return files
+
+
+def _build_symbol_index(project_path: str) -> dict[str, list[dict]]:
+    """Построить индекс всех символов из .js/.ts файлов (с кэшированием).
+
+    Returns:
+        {symbol_name: [{file, language, signature}, ...], ...}
+    """
+    global _last_project_path
+    if _last_project_path != project_path:
+        _js_file_cache.clear()
+        _js_symbol_index.clear()
+        _last_project_path = project_path
+
+    cache_key = f"{project_path}"
+    if cache_key in _js_symbol_index:
+        return _js_symbol_index[cache_key]
+
+    files = _build_js_file_list(project_path)
+    index: dict[str, list[dict]] = {}
+
+    for fp, lang in files:
+        analyzer = get_analyzer(lang)
+        if analyzer is None:
+            continue
+
+        # Получаем все определения в файле
+        defs = analyzer.collect_definitions(fp)
+        for func in defs.get("functions", []):
+            name = func.get("name", "")
+            if not name:
+                continue
+            rel = os.path.relpath(fp, project_path)
+            entry = {
+                "language": lang,
+                "file": rel,
+                "signature": func,
+            }
+            index.setdefault(name, []).append(entry)
+
+    _js_symbol_index[cache_key] = index
+    return index
+
+
 # ── Поиск JS-символов в .js файлах ──────────────────────────────────
 
 
@@ -74,7 +158,7 @@ def find_js_symbol_in_project(
     symbol_name: str,
     project_path: str,
 ) -> list[dict]:
-    """Найти определение символа в .js/.ts файлах проекта.
+    """Найти определение символа в .js/.ts файлах проекта (с кэшированием).
 
     Args:
         symbol_name: имя JS-символа (функция/переменная)
@@ -83,32 +167,8 @@ def find_js_symbol_in_project(
     Returns:
         список найденных определений {file, language, signature, ...}
     """
-    results = []
-
-    for lang in ("javascript", "typescript"):
-        analyzer = get_analyzer(lang)
-        if analyzer is None:
-            continue
-
-        ext = ".js" if lang == "javascript" else ".ts"
-        # Также проверяем .jsx/.tsx
-        jsx_exts = [".jsx", ".tsx"] if lang == "typescript" else [".jsx"]
-
-        files = _get_all_files(project_path, extension=ext)
-        for jsx_ext in jsx_exts:
-            files.extend(_get_all_files(project_path, extension=jsx_ext))
-
-        for fp in files:
-            sig = analyzer.get_symbol_signature(fp, symbol_name)
-            if sig:
-                rel = os.path.relpath(fp, project_path)
-                results.append({
-                    "language": lang,
-                    "file": rel,
-                    "signature": sig,
-                })
-
-    return results
+    index = _build_symbol_index(project_path)
+    return index.get(symbol_name, [])
 
 
 # ── Основная функция PHP→JS анализа ────────────────────────────────

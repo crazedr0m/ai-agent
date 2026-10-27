@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 # mcp_servers/code_analyzer/tools.py — Инструменты анализатора кода
 #
-# 7 инструментов:
+# 8 инструментов:
 #   - scan_project              — полное сканирование проекта (все языки)
 #   - query_function            — сигнатура + тело + кто вызывает + кого вызывает
 #   - query_callers             — кто вызывает функцию
 #   - query_callees             — кого вызывает функция
 #   - query_cross_references    — поиск символа во всех языках проекта
 #   - query_js_from_php         — PHP→JS кроссязыковый анализ (один файл)
-#   - query_php_js_scan         — PHP→JS сканирование всего проекта
+#   - scan_php_js_project       — PHP→JS сканирование всего проекта
+#   - scan_procedural_php       — анализ процедурного (легаси) PHP кода
 #
 # Не содержит логики обхода AST — делегирует языковым модулям через ParserRegistry.
 
@@ -25,6 +26,10 @@ from mcp_servers.code_analyzer.languages import (
 from mcp_servers.code_analyzer.cross_language.php_js_bridge import (
     analyze_php_to_js,
     scan_project_php_to_js,
+)
+from mcp_servers.code_analyzer.languages.php.procedural import (
+    analyze_procedural_file,
+    scan_procedural_project,
 )
 
 
@@ -353,3 +358,17 @@ def scan_php_js_project(project_path: str) -> str:
         "total_resolved_symbols": total_resolved,
         "details": results,
     }, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def scan_procedural_php(project_path: str) -> str:
+    """Сканировать PHP-проект на предмет процедурного (легаси) кода.
+
+    Находит PHP-файлы без функций/классов, анализирует top-level statements:
+    echo, include/require, extract(), $_GET/$_POST, inline HTML, jQuery.
+
+    Args:
+        project_path: корневая директория проекта
+    """
+    result = scan_procedural_project(project_path)
+    return json.dumps(result, indent=2, ensure_ascii=False)

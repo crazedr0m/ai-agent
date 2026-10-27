@@ -32,9 +32,10 @@ _RE_JS_INLINE = re.compile(
 
 # Триггеры JS-кода (не обязательно внутри <script>)
 _RE_JS_CODE = re.compile(
-    r"\b(alert|console\.|document\.|window\.|function\s+\w+\s*\(|"
+    r"(?:\b(?:alert|console\.|document\.|window\.|function\s+\w+\s*\(|"
     r"var\s+\w+|let\s+\w+|const\s+\w+|"
-    r"\$\s*\(\s*['\"`]|\.addEventListener|\.getElementById)\b",
+    r"\.addEventListener|\.getElementById)\b"
+    r"|\$\s*\(\s*['\"`])",
 )
 
 # Извлечение содержимого <script> тегов
