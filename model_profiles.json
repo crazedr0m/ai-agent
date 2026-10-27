@@ -1,0 +1,123 @@
+{
+  "profiles": {
+    "qwen2.5-coder:7b": {
+      "mode": "chat",
+      "temperature": 0.2,
+      "num_ctx": 8192,
+      "timeout": 120,
+      "max_retries": 2,
+      "description": "Компактная кодер-модель, быстрые ответы"
+    },
+    "qwen2.5-coder:14b": {
+      "mode": "chat",
+      "temperature": 0.2,
+      "num_ctx": 16384,
+      "timeout": 120,
+      "max_retries": 2,
+      "description": "Основная кодер-модель, баланс скорости и качества"
+    },
+    "qwen2.5-coder:14b-instruct-q4_K_M": {
+      "mode": "chat",
+      "temperature": 0.2,
+      "num_ctx": 16384,
+      "timeout": 120,
+      "max_retries": 2,
+      "description": "Квантованная 14B кодер-модель"
+    },
+    "qwen2.5-coder:32b": {
+      "mode": "chat",
+      "temperature": 0.2,
+      "num_ctx": 16384,
+      "timeout": 300,
+      "max_retries": 2,
+      "description": "Большая кодер-модель, частично на CPU"
+    },
+    "qwen3-coder:30b": {
+      "mode": "chat",
+      "temperature": 0.2,
+      "num_ctx": 16384,
+      "timeout": 300,
+      "max_retries": 2,
+      "description": "Новейшая кодер-модель 30B"
+    },
+    "deepseek-r1:14b": {
+      "mode": "chat",
+      "temperature": 0.0,
+      "num_ctx": 16384,
+      "timeout": 300,
+      "max_retries": 2,
+      "description": "Reasoning-модель 14B, низкая температура для точности"
+    },
+    "deepseek-r1:32b": {
+      "mode": "chat",
+      "temperature": 0.0,
+      "num_ctx": 16384,
+      "timeout": 600,
+      "max_retries": 3,
+      "description": "Большая reasoning-модель 32B, частично на CPU, долгий таймаут"
+    },
+    "deepseek-r1:8b": {
+      "mode": "chat",
+      "temperature": 0.0,
+      "num_ctx": 8192,
+      "timeout": 300,
+      "max_retries": 2,
+      "description": "Компактная reasoning-модель 8B"
+    },
+    "deepseek-coder-v2:16b-lite-instruct-q4_K_M": {
+      "mode": "chat",
+      "temperature": 0.2,
+      "num_ctx": 16384,
+      "timeout": 120,
+      "max_retries": 2,
+      "description": "DeepSeek Coder V2 16B, lite instruct"
+    },
+    "deepseek-coder-v2:16b": {
+      "mode": "chat",
+      "temperature": 0.2,
+      "num_ctx": 16384,
+      "timeout": 120,
+      "max_retries": 2,
+      "description": "DeepSeek Coder V2 16B, полная версия"
+    },
+    "llama3.1:8b": {
+      "mode": "chat",
+      "temperature": 0.2,
+      "num_ctx": 8192,
+      "timeout": 120,
+      "max_retries": 2,
+      "description": "General-purpose 8B"
+    },
+    "gemma2:9b": {
+      "mode": "chat",
+      "temperature": 0.2,
+      "num_ctx": 8192,
+      "timeout": 120,
+      "max_retries": 2,
+      "description": "Google Gemma 2 9B"
+    },
+    "phi4-mini:latest": {
+      "mode": "chat",
+      "temperature": 0.2,
+      "num_ctx": 8192,
+      "timeout": 120,
+      "max_retries": 2,
+      "description": "Microsoft Phi-4 Mini"
+    },
+    "qwen3:8b": {
+      "mode": "chat",
+      "temperature": 0.2,
+      "num_ctx": 8192,
+      "timeout": 120,
+      "max_retries": 2,
+      "description": "Qwen 3 8B"
+    }
+  },
+  "defaults": {
+    "mode": "chat",
+    "temperature": 0.2,
+    "num_ctx": 8192,
+    "timeout": 120,
+    "max_retries": 2
+  }
+}

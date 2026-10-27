@@ -85,15 +85,13 @@ def call_ollama(system_prompt: str, user_prompt: str, model_override: str = None
     Использует OllamaAdapter из modules/llm/:
     - Основной путь: /api/chat (Ollama сам подставляет шаблон)
     - Fallback: /api/generate с ChatML для старых моделей
-    - Timeout 120с, до 2 retry при ConnectionError/таймауте
+    - Параметры (таймаут, температура, num_ctx) — из model_profiles.json
     """
     from modules.llm import call_chat
     return call_chat(
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         model_override=model_override,
-        temperature=0.2,
-        num_ctx=8192,
     )
 
 def run_isolated_tests(test_file: str) -> tuple[bool, str]:

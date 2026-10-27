@@ -4,11 +4,15 @@
 # Переход с /api/generate + ручной ChatML на /api/chat.
 # Шаблон подставляет сам Ollama, разметка не привязана к Qwen.
 #
+# Фаза 1.6: Профили моделей — параметры (таймаут, температура, num_ctx)
+# настраиваются через model_profiles.json.
+#
 # Usage:
 #   from modules.llm import call_chat
 #   response = call_chat("system prompt", "user prompt", model="qwen2.5-coder:7b")
 
 import json
+import os
 import time
 from typing import Optional
 
@@ -23,9 +27,62 @@ DEFAULT_TIMEOUT = 120  # секунд на один запрос
 MAX_RETRIES = 2
 RETRY_DELAY = 2.0  # секунд между retry
 
+# ──────────────────────────────────────────────
+# Загрузка профилей моделей (Фаза 1.6)
+# ──────────────────────────────────────────────
+
+_PROFILES_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "model_profiles.json",
+)
+
+_PROFILES_CACHE = None  # type: Optional[dict]
+
+
+def _load_profiles() -> dict:
+    """Загрузить model_profiles.json, кешировать."""
+    global _PROFILES_CACHE
+    if _PROFILES_CACHE is not None:
+        return _PROFILES_CACHE
+
+    try:
+        with open(_PROFILES_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        _PROFILES_CACHE = data
+        return data
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        console.print(f"[dim]⚠️ model_profiles.json не загружен: {e}[/dim]")
+        _PROFILES_CACHE = {"profiles": {}, "defaults": {}}
+        return _PROFILES_CACHE
+
+
+def get_model_profile(model_name: str) -> dict:
+    """Получить профиль модели. Неизвестные поля заполняются из defaults."""
+    data = _load_profiles()
+    defaults = data.get("defaults", {})
+    profile = data.get("profiles", {}).get(model_name, {})
+    merged = dict(defaults)
+    merged.update(profile)
+    return merged
+
+
+def get_profile_value(model_name: str, key: str, default=None):
+    """Получить одно значение из профиля модели."""
+    return get_model_profile(model_name).get(key, default)
+
+
+# ──────────────────────────────────────────────
+# Адаптер
+# ──────────────────────────────────────────────
+
 
 class OllamaAdapter:
-    """Адаптер для вызова Ollama через /api/chat."""
+    """Адаптер для вызова Ollama через /api/chat.
+
+    Поддерживает профили моделей из model_profiles.json (Фаза 1.6):
+    - timeout, max_retries, temperature, num_ctx переопределяются из профиля
+    - Если профиля нет — используются значения по умолчанию
+    """
 
     def __init__(
         self,
@@ -41,49 +98,80 @@ class OllamaAdapter:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
 
+    def _resolve_params(self, model: Optional[str] = None,
+                        temperature: Optional[float] = None,
+                        num_ctx: Optional[int] = None,
+                        timeout: Optional[int] = None,
+                        max_retries: Optional[int] = None) -> dict:
+        """Объединить явные параметры с профилем модели.
+
+        Явные параметры имеют приоритет над профилем.
+        """
+        model_name = model or self.default_model
+        profile = get_model_profile(model_name)
+
+        return {
+            "model": model_name,
+            "temperature": temperature if temperature is not None else profile.get("temperature", 0.2),
+            "num_ctx": num_ctx if num_ctx is not None else profile.get("num_ctx", 8192),
+            "timeout": timeout if timeout is not None else profile.get("timeout", self.timeout),
+            "max_retries": max_retries if max_retries is not None else profile.get("max_retries", self.max_retries),
+        }
+
     def call_chat(
         self,
         system_prompt: str,
         user_prompt: str,
         model: Optional[str] = None,
-        temperature: float = 0.2,
-        num_ctx: int = 8192,
+        temperature: Optional[float] = None,
+        num_ctx: Optional[int] = None,
         stream: bool = False,
+        timeout: Optional[int] = None,
+        max_retries: Optional[int] = None,
     ) -> str:
         """Вызов LLM через /api/chat.
 
         Ollama сам подставляет ChatML в зависимости от модели.
+        Параметры берутся из model_profiles.json, если не указаны явно.
         Возвращает текст ответа или пустую строку при ошибке.
         """
+        params = self._resolve_params(
+            model=model, temperature=temperature,
+            num_ctx=num_ctx, timeout=timeout, max_retries=max_retries,
+        )
+
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
 
         payload = {
-            "model": model or self.default_model,
+            "model": params["model"],
             "messages": messages,
             "stream": stream,
             "options": {
-                "temperature": temperature,
-                "num_ctx": num_ctx,
+                "temperature": params["temperature"],
+                "num_ctx": params["num_ctx"],
             },
         }
 
+        effective_timeout = params["timeout"]
+        effective_retries = params["max_retries"]
+
         last_error = None
-        for attempt in range(1 + self.max_retries):
+        for attempt in range(1 + effective_retries):
             try:
                 response = requests.post(
                     f"{self.base_url}/api/chat",
                     json=payload,
-                    timeout=self.timeout,
+                    timeout=effective_timeout,
                 )
                 response.raise_for_status()
                 data = response.json()
                 return data.get("message", {}).get("content", "")
 
             except requests.Timeout:
-                last_error = f"Timeout after {self.timeout}s"
+                last_error = f"Timeout after {effective_timeout}s"
                 console.print(
                     f"[yellow]⏱ Ollama timeout (attempt {attempt + 1}): "
                     f"{last_error}[/yellow]"
@@ -107,11 +195,11 @@ class OllamaAdapter:
                     f"{last_error}[/yellow]"
                 )
 
-            if attempt < self.max_retries:
+            if attempt < effective_retries:
                 time.sleep(self.retry_delay * (attempt + 1))
 
         console.print(
-            f"[red]❌ Ollama call failed after {self.max_retries + 1} attempts: "
+            f"[red]❌ Ollama call failed after {effective_retries + 1} attempts: "
             f"{last_error}[/red]"
         )
         return ""
