@@ -64,3 +64,18 @@ MCP-сервер на базе Tree-sitter, реализующий мульти�
 
 ### Cross-language Graph (Межъязыковой граф вызовов)
 Совмещённый граф вызовов, объединяющий AST-данные из нескольких языков. Для PHP-файла показывает также JS-символы, найденные в строковых литералах, с указанием файла-источника (.js).
+
+### Fractional Layered Memory (Дробно-слойная память)
+MCP-сервер долговременной памяти агента: факты хранятся узлами и раскладываются по слоям (band) по дробно-логарифмической шкале. Реализован в `mcp_servers/fractional_memory/`. Инструменты: `write_fact`, `query_facts`, `consolidate_memory`; ресурс `memory://bands`.
+
+### Fractional Cache (Дробно-логарифмический кэш)
+Принцип организации памяти: положение факта определяется дробно-логарифмической шкалой по возрасту и частоте доступа, а не линейным кэшем. Отражён в формуле пересчёта слоя в [`MemoryNode.recalculate_band()`](mcp_servers/fractional_memory/helpers.py:58).
+
+### Band (Слой памяти)
+Одна из 16 полос хранения факта (0–15). Band 15 (Core) — статические правила, всегда доступны; Bands 1–14 — ассоциативные факты по gate_trigger; Band 0 (Spike) — быстрозабывающийся контекст.
+
+### MemoryNode (Узел памяти)
+Единица хранения дробно-слойной памяти: `payload`, `gate_trigger`, `frequency_band`, `access_count`, `last_accessed`. Определён в [`mcp_servers/fractional_memory/helpers.py`](mcp_servers/fractional_memory/helpers.py:27).
+
+### FractionalMemory (Интеграция памяти)
+Модуль-мост между конвейером миграции и MCP-сервером памяти: записывает факты о задачах, загружает контекст прошлых сессий, финализирует миграцию. Реализован в [`modules/fractional_memory.py`](modules/fractional_memory.py:5).

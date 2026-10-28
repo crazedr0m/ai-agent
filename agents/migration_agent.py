@@ -19,7 +19,7 @@ from modules.parser import extract_code_from_markdown
 from modules.tracer import TraceSession
 from modules.repo_map import build_repo_map, format_repo_map_for_llm
 from modules.dependency_planner import DependencyPlanner
-from modules.migration_context import CheckpointManager, LOG16Integration
+from modules.migration_context import CheckpointManager, FractionalMemory
 from agents.retry_system import RetrySystem
 from agents.pipeline_executor import PipelineExecutor
 from agents.task_manager import load_tasks, save_tasks, load_manifest, update_task_status
@@ -59,10 +59,10 @@ class MigrationAgent(BaseAgent):
         # Регистрируем инструменты
         import core_tools  # noqa: F401
 
-        # Чекпоинты и LOG16
+        # Чекпоинты и память
         project_name = load_manifest(self.manifest_path).get("project_name", "")
         self.checkpoint = CheckpointManager(project_name)
-        self.log16 = LOG16Integration(project_name)
+        self.memory = FractionalMemory(project_name)
 
         # Экземпляры подмодулей (заполняются при необходимости)
         self._pipeline = None
@@ -87,14 +87,14 @@ class MigrationAgent(BaseAgent):
         if self.tracer is None:
             self.tracer = TraceSession("migration_agent")
 
-        # LOG16 recall
-        core.console.print("[blue]🧠 LOG16: загрузка контекста прошлых сессий...[/blue]")
-        log16_context = self.log16.recall_project_context()
-        if log16_context:
-            core.console.print(f"[dim]📜 Воспоминания: {log16_context[:200]}...[/dim]")
+        # Память: загрузка контекста прошлых сессий
+        core.console.print("[blue]🧠 Память: загрузка контекста прошлых сессий...[/blue]")
+        memory_context = self.memory.recall_project_context()
+        if memory_context:
+            core.console.print(f"[dim]📜 Воспоминания: {memory_context[:200]}...[/dim]")
             from modules.tracer import StepTrace
             self.tracer.log_step(StepTrace(
-                "system", f"LOG16 recall: {log16_context[:500]}"
+                "system", f"memory recall: {memory_context[:500]}"
             ))
 
         # repo_map
@@ -110,7 +110,7 @@ class MigrationAgent(BaseAgent):
         )
 
         try:
-            self.log16.record_project_summary(self._repo_map)
+            self.memory.record_project_summary(self._repo_map)
         except Exception:
             pass
 
@@ -132,9 +132,9 @@ class MigrationAgent(BaseAgent):
         # Параллельный конвейер
         asyncio.run(self.execute_all_with_retry())
 
-        # Финальная запись LOG16
+        # Финальная запись памяти
         try:
-            self.log16.finalize_migration(
+            self.memory.finalize_migration(
                 self.checkpoint.load_checkpoint(),
                 load_tasks()
             )
@@ -210,7 +210,7 @@ class MigrationAgent(BaseAgent):
         ))
 
         try:
-            self.log16.record_task_completed(
+            self.memory.record_task_completed(
                 {"target_file": "PLAN", "effort": "?", "layer": 0},
                 self._repo_map.get("summary") if self._repo_map else None,
             )
@@ -329,7 +329,7 @@ class MigrationAgent(BaseAgent):
             self._pipeline = PipelineExecutor(
                 self,
                 checkpoint=self.checkpoint,
-                log16=self.log16,
+                memory=self.memory,
                 tracer=self.tracer,
                 repo_map=self._repo_map,
                 shared_context_path=self.shared_context_path,

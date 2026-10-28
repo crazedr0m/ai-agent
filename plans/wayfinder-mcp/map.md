@@ -1,8 +1,8 @@
-# wayfinder:map — MCP-серверы для концепции «Субстрат» (статический анализатор + LOG16)
+# wayfinder:map — MCP-серверы (статический анализатор + дробно-слойная память)
 
 ## Destination
 
-Спецификация и архитектурный план для двух независимых MCP-серверов, реализующих концепцию «Субстрат»: статический анализатор кода на базе Tree-sitter и динамическая multi-frequency ассоциативная память LOG16. Путь ясен, когда зафиксированы: API обоих серверов, формат данных, схема интеграции с ai-agent через mcp_client.py, и план итераций v1/v2/v3.
+Спецификация и архитектурный план для двух независимых MCP-серверов: статический анализатор кода на базе Tree-sitter и динамическая многослойная ассоциативная память с дробно-логарифмической шкалой. Путь ясен, когда зафиксированы: API обоих серверов, формат данных, схема интеграции с ai-agent через mcp_client.py, и план итераций v1/v2/v3.
 
 ## Notes
 
@@ -10,7 +10,7 @@
 - **Язык**: Python 3.10+, FastMCP SDK
 - **Связка**: два независимых MCP-сервера, объединённых через mcp_client.py
 - **Статический анализатор**: Tree-sitter (Python-биндинги), Python-only v1
-- **LOG16**: MemoryNode + 16 log-полос + write/query/equalize + status resource (v1)
+- **Память**: MemoryNode + 16 полос + write/query/consolidate + status resource (v1)
 - **Формат данных**: JSON (канонический) + Markdown (MCP-ресурс для чтения моделью)
 - **Интеграция**: mcp_client.py из основного wayfinder-плана ai-agent
 - **Тестирование**: на этапе реализации
@@ -20,9 +20,9 @@
 <!-- the index: one line per closed ticket -->
 
 - **G1** (Архитектура анализатора): Python-only v1, 4 инструмента (scan_project, query_function, callers, callees), JSON-формат графа {nodes, edges}, кэширование AST. Реализовано в mcp_servers/code_analyzer/.
-- **G2** (LOG16 v1 API): MemoryNode с recalculate_band(log16), write/query/equalize, status resource, keyword match (без эмбеддингов в v1). Реализовано в mcp_servers/substrate/.
-- **G3** (Сценарии использования): code_analyzer — для map репозитория (Фаза 6.1); substrate — долговременная память между сессиями и equalize по расписанию.
-- **G4** (Интеграция): mcp_servers.json — stdio transport; MCPManager регистрирует инструменты с префиксом (code_analyzer__scan_project, substrate__write_to_substrate); graceful degradation.
+- **G2** (память v1 API): MemoryNode с recalculate_band (дробно-логарифмическая шкала), write/query/consolidate, status resource, keyword match (без эмбеддингов в v1). Реализовано в mcp_servers/fractional_memory/.
+- **G3** (Сценарии использования): code_analyzer — для map репозитория (Фаза 6.1); fractional_memory — долговременная память между сессиями и consolidate по расписанию.
+- **G4** (Интеграция): mcp_servers.json — stdio transport; MCPManager регистрирует инструменты с префиксом (code_analyzer__scan_project, fractional_memory__write_fact); graceful degradation.
 
 ## Tickets
 
@@ -35,8 +35,8 @@
 ### Grilling (HITL — требуют обсуждения)
 
 - [G1 — Архитектура статического анализатора](plans/wayfinder-mcp/tickets/G1-analyzer-architecture.md): что парсить, формат графа, MCP-инструменты/ресурсы, кэширование
-- [G2 — LOG16 v1 API Specification](plans/wayfinder-mcp/tickets/G2-log16-v1-api.md): MemoryNode, write/query/equalize, status resource
-- [G3 — Сценарии использования MCP-серверов агентом](plans/wayfinder-mcp/tickets/G3-usage-scenarios.md): как агент пишет/читает субстрат, изоляция проектов
+- [G2 — Память v1 API Specification](plans/wayfinder-mcp/tickets/G2-fractional-memory-v1-api.md): MemoryNode, write/query/consolidate, status resource
+- [G3 — Сценарии использования MCP-серверов агентом](plans/wayfinder-mcp/tickets/G3-usage-scenarios.md): как агент пишет/читает память, изоляция проектов
 - [G4 — Интеграция MCP-серверов с ai-agent](plans/wayfinder-mcp/tickets/G4-integration.md): конфигурация, запуск, регистрация инструментов, обработка ошибок
 
 ### Блокирующие зависимости
@@ -55,7 +55,7 @@ R3 ──→ G4
 ## Not yet specified
 
 - **Стратегия тестирования**: моки, интеграционные тесты — будет определена после G4
-- **LOG16 v2+**: SubstrateCompressor (NumPy), FractalKAN, персистентность (SQLite/Redis) — отложено после v1
+- **Память v2+**: компрессор спайков (NumPy), FractalKAN, персистентность (SQLite/Redis) — отложено после v1
 - **План итераций v1/v2/v3**: будет составлен после закрытия всех G-тикетов
 
 ## Out of scope

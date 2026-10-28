@@ -1,4 +1,4 @@
-# [G2] LOG16 v1 API Specification
+# [G2] Память v1 API Specification
 
 **Тип**: grilling  
 **Статус**: open  
@@ -6,7 +6,7 @@
 
 ## Question
 
-Как спроектировать MCP-сервер LOG16 для v1 (core: MemoryNode + 16 bands + write/query/equalize + status)?
+Как спроектировать MCP-сервер дробно-слойной памяти для v1 (core: MemoryNode + 16 bands + write/query/consolidate + status)?
 
 Конкретные вопросы:
 
@@ -18,26 +18,26 @@
    - access_count: int
    - last_accessed: float (timestamp)
    - metadata: dict (дополнительные поля)
-   - recalculate_band(): формула log16(age+1) - log16(access_count+1)
+   - recalculate_band(): дробно-логарифмическая формула floor(log_16(age+1) - log_16(access_count+1))
 
-2. **write_to_substrate(payload, gate_trigger):**
+2. **write_fact(payload, gate_trigger):**
    - Создаёт MemoryNode в Band 0 (HF)
    - Если похожий gate_trigger уже есть — увеличивает access_count, пересчитывает band
    - Возвращает node_id
 
-3. **query_substrate(query):**
+3. **query_facts(query):**
    - Сканирует gate_triggers (детерминированное совпадение ключевых слов)
    - Band 15 (Core) — всегда возвращается
    - Bands 1-14 — только при совпадении gate_trigger
    - Band 0 — топ-3 последних spike
    - Возвращает отсортированный по band (убывание) список фактов
 
-4. **equalize_memory():**
+4. **consolidate_memory():**
    - Пересчитывает band для всех узлов
    - Удаляет узлы, упавшие ниже Band 0 (полный decay)
    - Можно вызывать вручную или по расписанию
 
-5. **substrate://status:**
+5. **memory://bands:**
    - Визуализация распределения узлов по 16 band
    - ASCII-диаграмма
 
@@ -48,7 +48,7 @@
 
 ## Блокирует
 
-- Все тикеты по реализации LOG16
+- Все тикеты по реализации памяти
 
 ## Зависимости
 

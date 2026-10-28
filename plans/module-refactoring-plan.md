@@ -7,7 +7,7 @@
 | № | Файл | Строк | Классов | Функций | Статус |
 |---|------|-------|---------|---------|--------|
 | 1 | `agents/migration_agent.py` | **~840** | 1 (MigrationAgent) | ~15 методов | ⚠️ КРИТИЧЕСКИЙ |
-| 2 | `modules/migration_context.py` | **514** | 3 (CheckpointManager, ProgressReporter, LOG16Integration) | 1 | ⚠️ КРУПНЫЙ |
+| 2 | `modules/migration_context.py` | **514** | 3 (CheckpointManager, ProgressReporter, FractionalMemory) | 1 | ⚠️ КРУПНЫЙ |
 | 3 | `modules/eval_harness.py` | **446** | 3 (EvalCase, EvalResult, EvalRunner, EvalReporter) | 2 | ⚠️ КРУПНЫЙ |
 | 4 | `modules/tui/integration_example.py` | ~440 | 1 (MockMigrationAgent) | ~15 функций | ⚠️ ДЕМО |
 | 5 | `modules/tui/app.py` | **381** | 1 (TUIApp) | ~10 методов | ⚠️ КРУПНЫЙ |
@@ -53,7 +53,7 @@
 **Проблема:** Три не связанных между собой класса в одном файле:
 - `CheckpointManager` — постоянство/восстановление
 - `ProgressReporter` — отчёты
-- `LOG16Integration` — интеграция с LOG16 Substrate
+- `FractionalMemory` — интеграция с дробно-слойной памятью
 - `generate_migration_report()` — отдельная функция
 
 ### 2.3. `modules/dev_tools.py` — СМЕШЕНИЕ ОТВЕТСТВЕННОСТЕЙ ⛔
@@ -105,7 +105,7 @@ class MigrationAgent(BaseAgent):
 
 **Риски:**
 - `_execute_single_task()` и `_execute_task_pipeline()` — дубли. Решение: удалить синхронную версию, оставить только async.
-- `_log_checkpoint_and_log16()` инлайновый — перенести в `task_manager.py`.
+- `_log_checkpoint_and_memory()` инлайновый — перенести в `task_manager.py`.
 
 ---
 
@@ -117,13 +117,13 @@ class MigrationAgent(BaseAgent):
 modules/
 ├── checkpoint_manager.py      # CheckpointManager (из migration_context)
 ├── progress_reporter.py       # ProgressReporter + generate_migration_report
-├── log16_integration.py       # LOG16Integration
+├── fractional_memory.py       # FractionalMemory
 ├── migration_context.py       # удалить (ушел на 3 модуля)
 ```
 
 **Interface каждого:** один класс, 3-6 методов.
 
-**Seam:** Интерфейс `CheckpointManager` уже чистый. `ProgressReporter` — чистый. `LOG16Integration` — чистый.
+**Seam:** Интерфейс `CheckpointManager` уже чистый. `ProgressReporter` — чистый. `FractionalMemory` — чистый.
 
 **Риски:** Нужно обновить импорты во всех файлах, использующих `from modules.migration_context import ...`.
 
@@ -223,7 +223,7 @@ flowchart TB
         MC["modules/migration_context.py (514 строк)"]
         CM["modules/checkpoint_manager.py (NEW)"]
         PR["modules/progress_reporter.py (NEW)"]
-        LI["modules/log16_integration.py (NEW)"]
+        LI["modules/fractional_memory.py (NEW)"]
     end
     
     subgraph "Приоритет 3"

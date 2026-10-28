@@ -30,7 +30,7 @@ class PipelineExecutor:
     Внутренние зависимости (передаются через constructor):
         agent: BaseAgent        — для call_llm() / load_prompt()
         checkpoint              — CheckpointManager
-        log16                   — LOG16Integration
+        memory                  — FractionalMemory
         tracer                  — TraceSession
         repo_map                — карта репозитория (опционально)
         shared_context_path     — путь к shared_context.json
@@ -39,13 +39,13 @@ class PipelineExecutor:
     """
 
     def __init__(self, agent: BaseAgent, *,
-                 checkpoint=None, log16=None, tracer=None, repo_map=None,
+                 checkpoint=None, memory=None, tracer=None, repo_map=None,
                  shared_context_path: str = "shared_context.json",
                  model_architect: str = "qwen3-coder:30b",
                  model_coder: str = "qwen2.5-coder:14b"):
         self.agent = agent
         self.checkpoint = checkpoint
-        self.log16 = log16
+        self.memory = memory
         self.tracer = tracer
         self.repo_map = repo_map
         self.shared_context_path = shared_context_path
@@ -256,7 +256,7 @@ class PipelineExecutor:
 
     def _log_end(self, task_id: int, success: bool, target_file: str,
                  error_msg: str = None, start_time: datetime = None):
-        """Сохранить чекпоинт + LOG16 после завершения задачи."""
+        """Сохранить чекпоинт + память после завершения задачи."""
         if self.checkpoint:
             status = "completed" if success else "failed"
             details = {}
@@ -266,9 +266,9 @@ class PipelineExecutor:
                 details["error"] = error_msg[:500]
             self.checkpoint.save_checkpoint(task_id, status, details)
 
-        if self.log16:
+        if self.memory:
             try:
-                self.log16.record_task_completed(
+                self.memory.record_task_completed(
                     {"target_file": target_file, "effort": "?", "layer": 0},
                     self.repo_map.get("summary") if self.repo_map else None,
                 )

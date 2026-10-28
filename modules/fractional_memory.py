@@ -1,42 +1,42 @@
 # -*- coding: utf-8 -*-
-# modules/log16_integration.py — Интеграция с LOG16 Substrate (Фаза 6.4)
+# modules/fractional_memory.py — Интеграция с дробно-слойной памятью
 
 
-class LOG16Integration:
-    """Интеграция с LOG16 Substrate для долговременной памяти.
+class FractionalMemory:
+    """Интеграция с дробно-слойной памятью для долговременного хранения.
 
     Автоматически:
     - Сохраняет ключевые факты о проекте после каждой выполненной задачи
     - Загружает контекст предыдущих сессий при старте
-    - Формирует структурированные записи для Substrate
+    - Формирует структурированные записи для памяти
     """
 
-    def __init__(self, project_name: str, substrate_tool_prefix: str = "substrate__"):
+    def __init__(self, project_name: str, memory_tool_prefix: str = "fractional_memory__"):
         """
         Args:
             project_name: имя проекта для gate_trigger
-            substrate_tool_prefix: префикс MCP-инструментов substrate
-                                (substrate__ если через MCPManager)
+            memory_tool_prefix: префикс MCP-инструментов памяти
+                                (fractional_memory__ если через MCPManager)
         """
         self.project_name = project_name
-        self._write_tool = f"{substrate_tool_prefix}write_to_substrate"
-        self._query_tool = f"{substrate_tool_prefix}query_substrate"
-        self._equalize_tool = f"{substrate_tool_prefix}equalize_memory"
+        self._write_tool = f"{memory_tool_prefix}write_fact"
+        self._query_tool = f"{memory_tool_prefix}query_facts"
+        self._consolidate_tool = f"{memory_tool_prefix}consolidate_memory"
         self._enabled = self._check_available()
 
     def _check_available(self) -> bool:
-        """Проверить, доступны ли инструменты Substrate."""
+        """Проверить, доступны ли инструменты памяти."""
         try:
             from core.core_tools import tool_registry
             return (
                 self._write_tool in tool_registry._tools
-                or "write_to_substrate" in tool_registry._tools
+                or "write_fact" in tool_registry._tools
             )
         except Exception:
             return False
 
     def record_task_completed(self, task: dict, repo_map_summary: dict = None):
-        """Записать факт о выполненной задаче в Substrate.
+        """Записать факт о выполненной задаче в память.
 
         Args:
             task: задача из tasks.json
@@ -62,10 +62,10 @@ class LOG16Integration:
                 gate_trigger=gate_trigger,
             )
         except Exception:
-            pass  # LOG16 опционален
+            pass  # память опциональна
 
     def record_project_summary(self, repo_map: dict):
-        """Записать сводку проекта в Substrate при старте."""
+        """Записать сводку проекта в память при старте."""
         if not self._enabled:
             return
 
@@ -89,7 +89,7 @@ class LOG16Integration:
             pass
 
     def recall_project_context(self) -> str:
-        """Загрузить конекст предыдущих сессий из Substrate.
+        """Загрузить контекст предыдущих сессий из памяти.
 
         Returns:
             строка с фактами о проекте (для LLM)
@@ -111,9 +111,9 @@ class LOG16Integration:
         return ""
 
     def finalize_migration(self, checkpoint: dict, tasks_json: dict):
-        """Записать итоговый отчёт о миграции в Substrate.
+        """Записать итоговый отчёт о миграции в память.
 
-        Вызывает equalize_memory для пересчёта band после завершения.
+        Вызывает consolidate_memory для пересчёта band после завершения.
         """
         if not self._enabled:
             return
@@ -142,6 +142,6 @@ class LOG16Integration:
                 payload=payload,
                 gate_trigger=gate_trigger,
             )
-            execute_registered_tool(self._equalize_tool)
+            execute_registered_tool(self._consolidate_tool)
         except Exception:
             pass

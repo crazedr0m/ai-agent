@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
-# mcp_servers/substrate/tools.py — Инструменты LOG16 Substrate MCP-сервера
+# mcp_servers/fractional_memory/tools.py — Инструменты сервера дробно-слойной памяти
 #
 # 3 инструмента:
-#   - write_to_substrate — запись факта
-#   - query_substrate    — поиск по gate_trigger
-#   - equalize_memory    — пересчёт band + GC
+#   - write_fact         — запись факта
+#   - query_facts        — поиск по gate_trigger
+#   - consolidate_memory — пересчёт band + GC
 #
 # 1 ресурс:
-#   - substrate://status — визуализация распределения
+#   - memory://bands — визуализация распределения
 
 import json
 
-from mcp_servers.substrate.server import mcp
-from mcp_servers.substrate.helpers import (
+from mcp_servers.fractional_memory.server import mcp
+from mcp_servers.fractional_memory.helpers import (
     write,
     query,
     equalize,
@@ -21,8 +21,8 @@ from mcp_servers.substrate.helpers import (
 
 
 @mcp.tool()
-def write_to_substrate(payload: str, gate_trigger: str = "") -> str:
-    """Записать факт в субстрат (LOG16-память).
+def write_fact(payload: str, gate_trigger: str = "") -> str:
+    """Записать факт в память.
 
     Создаёт MemoryNode в Band 0 (Spike/HF).
     Если аналогичный gate_trigger уже существует — увеличивает
@@ -40,8 +40,8 @@ def write_to_substrate(payload: str, gate_trigger: str = "") -> str:
 
 
 @mcp.tool()
-def query_substrate(query_text: str, max_results: int = 50) -> str:
-    """Найти факты в субстрате по ключевым словам.
+def query_facts(query_text: str, max_results: int = 50) -> str:
+    """Найти факты в памяти по ключевым словам.
 
     Стратегия поиска:
       - Band 15 (Core) — всегда возвращается
@@ -71,11 +71,11 @@ def query_substrate(query_text: str, max_results: int = 50) -> str:
 
 
 @mcp.tool()
-def equalize_memory() -> str:
+def consolidate_memory() -> str:
     """Пересчитать band для всех узлов + удалить decayed.
 
     Выполняет:
-      1. Пересчёт frequency_band по формуле log16 для всех узлов
+      1. Пересчёт frequency_band по дробно-логарифмической формуле для всех узлов
       2. Удаление узлов, упавших ниже Band 0
       3. Возврат отчёта с распределением по band
 
@@ -85,7 +85,7 @@ def equalize_memory() -> str:
     return json.dumps(report, indent=2, ensure_ascii=False)
 
 
-@mcp.resource("substrate://status")
-def substrate_status() -> str:
-    """Визуализация распределения узлов LOG16 по 16 band."""
+@mcp.resource("memory://bands")
+def memory_status() -> str:
+    """Визуализация распределения узлов памяти по 16 band."""
     return get_status()

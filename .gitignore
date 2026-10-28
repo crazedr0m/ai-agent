@@ -1,5 +1,6 @@
 venv
 __pycache__
+*.pyc
 .roo
 legacy_src
 modern_src

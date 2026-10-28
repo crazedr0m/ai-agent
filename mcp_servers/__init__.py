@@ -7,11 +7,11 @@
 #   - filesystem/    — файловые операции (read, write, list, search, stat, grep)
 #   - fetch/         — веб-запросы (fetch_url, fetch_markdown)
 #   - code_analyzer/ — статический анализатор кода (Tree-sitter, Python v1)
-#   - substrate/     — LOG16 ассоциативная память (write/query/equalize)
+#   - fractional_memory/ — дробно-слойная память (write/query/consolidate)
 #
 # Запуск:
 #   python -m mcp_servers.code_analyzer  # stdio
-#   python -m mcp_servers.substrate      # stdio
+#   python -m mcp_servers.fractional_memory      # stdio
 #   python -m mcp_servers.filesystem     # stdio
 #   python -m mcp_servers.fetch --transport sse --port 3200
 

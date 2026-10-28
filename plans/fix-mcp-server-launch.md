@@ -22,12 +22,12 @@ flowchart LR
     B --> C["python -m mcp_servers.filesystem"]
     B --> D["python -m mcp_servers.fetch"]
     B --> E["python -m mcp_servers.code_analyzer"]
-    B --> F["python -m mcp_servers.substrate"]
+    B --> F["python -m mcp_servers.fractional_memory"]
     
     C -.-> G[❌ mcp_servers/filesystem/__main__.py: NOT FOUND]
     D -.-> H[❌ mcp_servers/fetch/__main__.py: NOT FOUND]
     E -.-> I[❌ mcp_servers/code_analyzer/__main__.py: NOT FOUND]
-    F -.-> J[❌ mcp_servers/substrate/__main__.py: NOT FOUND]
+    F -.-> J[❌ mcp_servers/fractional_memory/__main__.py: NOT FOUND]
 ```
 
 ## Исправление
@@ -52,7 +52,7 @@ main()
 | `mcp_servers/filesystem/__main__.py` | ❌ создать |
 | `mcp_servers/fetch/__main__.py` | ❌ создать |
 | `mcp_servers/code_analyzer/__main__.py` | ❌ создать |
-| `mcp_servers/substrate/__main__.py` | ❌ создать |
+| `mcp_servers/fractional_memory/__main__.py` | ❌ создать |
 
 ## Дополнительно обнаруженные проблемы
 

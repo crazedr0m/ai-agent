@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from modules.migration_context import (
     CheckpointManager,
     ProgressReporter,
-    LOG16Integration,
+    FractionalMemory,
     generate_migration_report,
 )
 

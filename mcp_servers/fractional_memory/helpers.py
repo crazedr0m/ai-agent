@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-# mcp_servers/substrate/helpers.py — LOG16 engine: MemoryNode, equalize, query
+# mcp_servers/fractional_memory/helpers.py — Дробно-логарифмический движок: MemoryNode, equalize, query
 #
-# Реализует концепцию SUBSTRAT / LOG16:
+# Реализует слоистую память с дробно-логарифмическими полосами:
 #   - MemoryNode с полями id, payload, gate_trigger, frequency_band,
 #     access_count, last_accessed, metadata
-#   - recalculate_band() по формуле log16
+#   - recalculate_band() по дробно-логарифмической формуле
 #   - write, query, equalize
 #   - status resource (распределение по 16 band)
 
@@ -13,11 +13,11 @@ import time
 import copy
 from typing import Optional
 
-# ── Логарифм по основанию 16 ─────────────────────────────────────
+# ── Дробно-логарифмическая шкала полос ────────────────────────────
 
 
-def _log16(x: float) -> float:
-    """Логарифм по основанию 16."""
+def _fractional_band(x: float) -> float:
+    """Дробный логарифм по основанию 16 (шкала полос)."""
     return math.log(x) / math.log(16)
 
 
@@ -25,7 +25,7 @@ def _log16(x: float) -> float:
 
 
 class MemoryNode:
-    """Один факт в субстрате.
+    """Один факт в памяти.
 
     Поля:
         id: str — уникальный идентификатор
@@ -56,9 +56,9 @@ class MemoryNode:
         self.metadata = metadata or {}
 
     def recalculate_band(self) -> int:
-        """Пересчитать полосу по формуле log16.
+        """Пересчитать полосу по дробно-логарифмической формуле.
 
-        band = floor(log16(age + 1) - log16(access_count + 1))
+        band = floor(log_16(age + 1) - log_16(access_count + 1))
 
         - age = время с последнего доступа (в условных единицах)
         - access_count = сколько раз читали
@@ -67,7 +67,7 @@ class MemoryNode:
         # Нормализуем age: 1 день = 1 единица
         age_days = max(0, age_seconds / 86400.0)
 
-        raw = _log16(age_days + 1) - _log16(self.access_count + 1)
+        raw = _fractional_band(age_days + 1) - _fractional_band(self.access_count + 1)
         band = max(0, min(15, int(raw)))
         self.frequency_band = band
         return band
@@ -101,7 +101,7 @@ class MemoryNode:
         )
 
 
-# ── LOG16 Store ───────────────────────────────────────────────────
+# ── Хранилище полос памяти ────────────────────────────────────────
 
 
 _default_store: dict[str, MemoryNode] = {}
@@ -116,7 +116,7 @@ def _generate_id() -> str:
 
 
 def write(payload: str, gate_trigger: str = "", metadata: Optional[dict] = None) -> str:
-    """Записать факт в субстрат.
+    """Записать факт в память.
 
     - Если похожий gate_trigger уже есть — увеличиваем access_count,
       пересчитываем band.
@@ -148,7 +148,7 @@ def write(payload: str, gate_trigger: str = "", metadata: Optional[dict] = None)
 def query(query_text: str, max_results: int = 50) -> list[dict]:
     """Поиск фактов по gate_trigger (keyword match).
 
-    Стратегия (из G2):
+    Стратегия:
       - Band 15 (Core) — всегда возвращается
       - Bands 1-14 — только при совпадении gate_trigger
       - Band 0 — топ-3 последних spike (по last_accessed)
@@ -235,7 +235,7 @@ def equalize() -> dict:
 def get_status() -> str:
     """Сформировать status resource: ASCII-диаграмма распределения по 16 band."""
     dist = _band_distribution()
-    lines = ["## LOG16 Substrate Status", "", "### Distribution across 16 bands", ""]
+    lines = ["## Fractional Memory Status", "", "### Distribution across 16 bands", ""]
 
     max_count = max(dist.values()) if any(dist.values()) else 1
     for band in range(15, -1, -1):

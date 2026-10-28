@@ -33,7 +33,7 @@ def my_tool(name: str, count: int = 1) -> str:
 ## Объявление ресурсов (@mcp.resource())
 
 ```python
-@mcp.resource("substrate://status")
+@mcp.resource("memory://bands")
 def get_status() -> str:
     """Описание ресурса."""
     return "Resource content"

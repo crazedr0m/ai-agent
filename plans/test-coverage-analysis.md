@@ -62,7 +62,7 @@
 | `migration_context.py` | 3 | 0 | **100%** | 🟢 Facade | — |
 | `llm/__init__.py` | 2 | 0 | **100%** | 🟢 | — |
 | `llm/adapter.py` | 90 | 60 | **33%** | 🔴 Низкое | — |
-| `log16_integration.py` | 67 | 60 | **10%** | 🔴 Критическое | — |
+| `fractional_memory.py` | 67 | 60 | **10%** | 🔴 Критическое | — |
 | `eval/` (6 файлов) | — | — | **0%** | 🔴 Критическое | — |
 | `tui/` (6 .py) | — | — | **0%** | 🔴 Критическое | — |
 
@@ -109,9 +109,9 @@
 | `filesystem/tools.py` | 109 | 21 | **81%** | 🟢 |
 | `filesystem/helpers.py` | 2 | 0 | **100%** | 🟢 |
 | `filesystem/server.py` | 3 | 0 | **100%** | 🟢 |
-| `substrate/helpers.py` | 103 | 9 | **91%** | 🟢 |
-| `substrate/tools.py` | 20 | 0 | **100%** | 🟢 |
-| `substrate/server.py` | 3 | 0 | **100%** | 🟢 |
+| `fractional_memory/helpers.py` | 103 | 9 | **91%** | 🟢 |
+| `fractional_memory/tools.py` | 20 | 0 | **100%** | 🟢 |
+| `fractional_memory/server.py` | 3 | 0 | **100%** | 🟢 |
 
 ---
 
@@ -158,7 +158,7 @@
 | 1 | `llm/adapter.py` | 33% | 70% | Высокая (Ollama, retry, профили) |
 | 2 | `retrospective.py` | 45% | 75% | Средняя |
 | 3 | `mcp_client.py` | 32% | 65% | Высокая (асинхронный) |
-| 4 | `log16_integration.py` | 10% | 60% | Средняя |
+| 4 | `fractional_memory.py` | 10% | 60% | Средняя |
 
 ### 🟡 P2 — Анализаторы кода и MCP-серверы
 

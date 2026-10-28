@@ -2,7 +2,7 @@
 
 > **Дата:** 2026-10-27
 > **Метод:** статическое чтение кода + grep. Тесты и сам конвейер **не запускались**: всё, что ниже помечено «по коду», проверено чтением, а не исполнением.
-> **Охват (прочитано целиком или в основной части):** [`_core.py`](../_core.py), [`core/`](../core/), [`agent.py`](../agent.py), [`agents/`](../agents/) (migration, pipeline_executor, task_manager, retry_system), [`modules/sandbox.py`](../modules/sandbox.py), [`modules/hot_reload.py`](../modules/hot_reload.py), [`modules/dev_tools.py`](../modules/dev_tools.py), [`modules/log16_integration.py`](../modules/log16_integration.py), [`core_tools.py`](../core_tools.py).
+> **Охват (прочитано целиком или в основной части):** [`_core.py`](../_core.py), [`core/`](../core/), [`agent.py`](../agent.py), [`agents/`](../agents/) (migration, pipeline_executor, task_manager, retry_system), [`modules/sandbox.py`](../modules/sandbox.py), [`modules/hot_reload.py`](../modules/hot_reload.py), [`modules/dev_tools.py`](../modules/dev_tools.py), [`modules/fractional_memory.py`](../modules/fractional_memory.py), [`core_tools.py`](../core_tools.py).
 > **Не охвачено глубоко:** `modules/tui/`, `modules/eval/`, `mcp_servers/*` (кроме grep-проверок), `tool_parser.py`, `repo_map.py`, `dependency_planner.py`. Оценки по ним — только по данным [`test-coverage-analysis.md`](test-coverage-analysis.md).
 
 ---
@@ -50,9 +50,9 @@
 - В итоге при провале весь конвейер (SDD→TDD→Coding→3×Critic→Meta) повторяется до 4 раз без изменения стратегии — дорого и бессмысленно. `AGENTS.md` («Улучшение №4 ✅») вводит в заблуждение.
 - Тип `task_id`: `str` в RetrySystem, `int` в остальном коде.
 
-### C-6. LOG16-интеграция мертва
-- [`log16_integration.py:30`](../modules/log16_integration.py:30) импортирует `tool_registry`, а в [`core/core_tools.py`](../core/core_tools.py) есть только `_GLOBAL_REGISTRY`; `execute_registered_tool` не существует нигде в репозитории (проверено grep).
-- `ImportError` проглатывается `except Exception` → `_enabled = False` всегда; пользователь видит «LOG16: загрузка контекста…», а запись в память не происходит. Покрытие 10% этого не ловит.
+### C-6. Интеграция памяти мертва
+- [`fractional_memory.py:30`](../modules/fractional_memory.py:30) импортирует `tool_registry`, а в [`core/core_tools.py`](../core/core_tools.py) есть только `_GLOBAL_REGISTRY`; `execute_registered_tool` не существует нигде в репозитории (проверено grep).
+- `ImportError` проглатывается `except Exception` → `_enabled = False` всегда; пользователь видит «Память: загрузка контекста…», а запись в память не происходит. Покрытие 10% этого не ловит.
 
 ### C-7. Мета-оптимизатор перезаписывает промпт без валидации
 - [`pipeline_executor.py:218-228`](../agents/pipeline_executor.py:218): вывод `deepseek-r1:32b` (с возможным `<think>…</think>` и markdown-обёрткой) пишется прямо в `coder_developer.txt`.
@@ -84,7 +84,7 @@
 ### A-4. Дублирование кода в ядре
 - `load_prompt` ≡ `load_prompt_from_file`, `update_prompt_file` ≈ `update_prompt_in_file` ([`_core.py:25-80`](../_core.py:25)). (Тот же вывод был в [`architecture-review-20260924.md`](architecture-review-20260924.md), кандидат #4, — не устранён.)
 - Два `TaskManager`-подобных: `agents/task_manager.py` и методы `RetrySystem.get/update_task_status` — разные файлы состояния, разные типы id.
-- `agents/pipeline_executor.py` и `agents/migration_agent.py` оба несут логику `StepTrace`/`log16`.
+- `agents/pipeline_executor.py` и `agents/migration_agent.py` оба несут логику `StepTrace`/памяти.
 
 ### A-5. Конфигурация размазана и захардкожена
 - `http://192.168.5.7:11434` в [`_core.py:15`](../_core.py:15), [`modules/llm/adapter.py:24`](../modules/llm/adapter.py:24), [`modules/eval/utils.py:9`](../modules/eval/utils.py:9). `OLLAMA_URL` в `_core.py` скорее всего не используется (всё идёт через adapter) — мёртвая константа.
@@ -98,7 +98,7 @@
 
 | ID | Проблема | Где |
 |---|---|---|
-| Q-1 | Проглатывание исключений (`except Exception: pass`), ≥15 мест, нет `logging` | `migration_agent.py:114,141,217`, `pipeline_executor.py:76,275`, `sandbox.py:147`, `log16_integration.py` (5 мест), `dev_tools.py:158` и др. |
+| Q-1 | Проглатывание исключений (`except Exception: pass`), ≥15 мест, нет `logging` | `migration_agent.py:114,141,217`, `pipeline_executor.py:76,275`, `sandbox.py:147`, `fractional_memory.py` (5 мест), `dev_tools.py:158` и др. |
 | Q-2 | Мёртвая ветка: `if not is_valid and kwargs: pass` — валидация аргументов фактически игнорируется, вызов идёт с частичными kwargs | [`core/core.py:154-156`](../core/core.py:154) |
 | Q-3 | Repair-цикл ReAct запрашивает «исправь вызов» **без истории диалога** — модель не видит свой прошлый ответ; кроме того, большая часть ошибок инструмента возвращается со статусом «успех» (`<tool_result>` с текстом «Ошибка…») и в repair вообще не попадает | [`core/core.py:87-123`](../core/core.py:87) |
 | Q-4 | ReAct не накапливает историю: на каждом шаге в LLM уходит только последний `current_user` (без исходной задачи) — для многошаговых задач контекст теряется | [`core/core.py:81-84`](../core/core.py:81) |
@@ -130,7 +130,7 @@
 - Корень захламлён: `eval_results*.json` (5 шт.), `prompts1.json`, `prompts/role_global_architect1.txt`, `role_tester_legacy.txt`, `project_code.py`, `gen_scaffold_test.py`, `test_core.py` рядом с `tests/`, `.coverage`.
 - `modules/tui/` содержит 8 .md-файлов (CHANGES, FINAL_SUMMARY, IMPLEMENTATION_SUMMARY и т.д.) и `demo.py/example.py/examples_api.py` с собственной копией «загрузки ядра» — код-дубль и шум.
 - `agent.py` на уровне импорта подключает MCP (сетевая побочка при `import`), любая подкоманда (`agent trace`) платит за это.
-- **Покрытие:** агенты 0%, `eval/` 0%, `tui/` 0%, `log16_integration` 10%, `llm/adapter` 33%, `mcp_client` 32%, анализаторы Go/JS/PHP/TS 11–22%. Ядро и `modules` хорошо покрыты — но именно непокрытые части содержат дефекты C-1…C-7.
+- **Покрытие:** агенты 0%, `eval/` 0%, `tui/` 0%, `fractional_memory` 10%, `llm/adapter` 33%, `mcp_client` 32%, анализаторы Go/JS/PHP/TS 11–22%. Ядро и `modules` хорошо покрыты — но именно непокрытые части содержат дефекты C-1…C-7.
 - Тестовый фреймворк по ADR — `unittest`; допустима смешанная структура (`test_core.py` в корне).
 
 ---
@@ -174,7 +174,7 @@
 ### P1 — архитектура
 7. A-1: единая загрузка ядра, оформление пакета (`pyproject.toml`), убрать `sys.path`-хаки и копию в `tui/*`.
 8. C-5: реализовать или честно убрать эскалацию; единый `TaskStore` (см. кандидат #1 прошлого обзора), единый тип `task_id`.
-9. C-6: починить LOG16 — публичный API реестра (`ToolRegistry.call(name, **kwargs)`), логировать причину отключения.
+9. C-6: починить интеграцию памяти — публичный API реестра (`ToolRegistry.call(name, **kwargs)`), логировать причину отключения.
 10. A-2: проверка зон мутабельности в `write_file/apply_diff` и в Meta-оптимизаторе (читать из `ZONE_MODULES`/ADR).
 11. A-5: единый `Settings` (env + `model_profiles.json`): URL Ollama, имена моделей, пути.
 
@@ -184,7 +184,7 @@
 14. Q-3/Q-4: ReAct с историей сообщений (messages), нормальные ошибки инструментов.
 15. Привести `requirements.txt`/`pyproject.toml` в соответствие; вынести `coverage` в dev.
 16. Почистить корень и `modules/tui/*.md`; синхронизировать AGENTS.md / CONTEXT.md с кодом (D-1…D-7).
-17. Подтянуть покрытие: `log16_integration`, `llm/adapter`, `mcp_client`, анализаторы Go/JS/PHP/TS.
+17. Подтянуть покрытие: `fractional_memory`, `llm/adapter`, `mcp_client`, анализаторы Go/JS/PHP/TS.
 
 ---
 
