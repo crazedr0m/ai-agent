@@ -1,3 +1,4 @@
 requests
 rich>=13.0.0
 python-dotenv
+coverage>=7.6.0

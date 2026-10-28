@@ -109,12 +109,15 @@ class TraceSession:
             meta["duration_ms"] = duration_ms
         self.log_step(StepTrace("llm_call", prompt, meta))
 
-    def log_tool_call(self, tool_name: str, args: str, result: str):
+    def log_tool_call(self, tool_name: str, args: str, result: str,
+                      error: bool = False, duration_ms: float = 0):
         """Удобный метод: лог вызова инструмента + результат."""
-        self.log_step(StepTrace("tool_call", args,
-                                {"tool_name": tool_name}))
-        self.log_step(StepTrace("tool_result", result,
-                                {"tool_name": tool_name}))
+        call_meta = {"tool_name": tool_name, "args": args}
+        result_meta = {"tool_name": tool_name, "error": error}
+        if duration_ms:
+            result_meta["duration_ms"] = duration_ms
+        self.log_step(StepTrace("tool_call", args, call_meta))
+        self.log_step(StepTrace("tool_result", result, result_meta))
 
     def log_final(self, response: str):
         """Лог финального ответа агента."""

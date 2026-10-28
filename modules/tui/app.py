@@ -8,14 +8,30 @@
 import os
 import sys
 import json
+import select
+import termios
+import tty
 from typing import Optional, Callable
 from datetime import datetime
 
 from rich.console import Console
-from rich.live import Live
-import curses
+from rich.cells import cell_len
 
 from .renderer import Renderer
+
+
+def _read_key(fd: int, timeout: float = 0.2):
+    """Неблокирующее чтение одного символа с fd (cbreak-режим)."""
+    ready, _, _ = select.select([fd], [], [], timeout)
+    if not ready:
+        return None
+    try:
+        data = os.read(fd, 1)
+    except OSError:
+        return None
+    if not data:
+        return None
+    return data.decode("utf-8", "replace")
 
 
 class TUIApp:
@@ -68,9 +84,11 @@ class TUIApp:
         self._agent = None
         self._tracer = None
         self._session_id = None
+        self._fd = None
+        self._dirty = True
 
     def run(self, agent=None, tracer=None):
-        """Запуск event loop с curses.
+        """Запуск event loop.
 
         Args:
             agent: экземпляр CasualAgent для обработки сообщений
@@ -82,33 +100,137 @@ class TUIApp:
         if self._tracer:
             self._session_id = self._tracer.session_id
 
+        if not sys.stdin.isatty():
+            self._run_console()
+            return
+
+        fd = sys.stdin.fileno()
+        self._fd = fd
+        old_settings = termios.tcgetattr(fd)
         try:
-            self.stdscr = curses.initscr()
-            curses.curs_set(0)
-            self.stdscr.timeout(100)
+            tty.setcbreak(fd)
+            while True:
+                if self._dirty:
+                    self._draw()
+                    self._dirty = False
+                key = _read_key(fd, 0.2)
+                if key is None:
+                    continue
+                if key in ("q", "Q"):
+                    break
 
-            with Live(self._render(), console=self.console, refresh_per_second=10) as live:
-                while True:
-                    key = self.stdscr.getch()
+                action, _ = self.HOTKEYS.get(key.lower(), (None, None))
+                if not action or action == "quit":
+                    continue
 
-                    if key == -1 or key == ord('q'):
-                        break
-
-                    try:
-                        action, description = self.HOTKEYS.get(
-                            chr(key).lower(), (None, None))
-                    except (ValueError, KeyError):
-                        action = None
-
-                    if action:
-                        handler = getattr(self, f"_on_{action}", None)
-                        if handler:
-                            handler()
+                handler = getattr(self, f"_on_{action}", None)
+                if handler:
+                    handler()
+                    self._dirty = True
 
         except KeyboardInterrupt:
             pass
         finally:
-            curses.endwin()
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            self.console.clear()
+            if self._tracer:
+                self._tracer.close()
+
+    def _read_line(self, prompt: str):
+        """Прочитать строку посимвольно в cbreak-режиме. None при отмене."""
+        if getattr(self, "_fd", None) is None:
+            try:
+                return self.console.input(f"[bold green]{prompt}[/bold green]")
+            except (EOFError, KeyboardInterrupt):
+                return None
+        sys.stdout.write(prompt)
+        sys.stdout.flush()
+        buf = []
+        pending = bytearray()
+        while True:
+            ready, _, _ = select.select([self._fd], [], [], None)
+            if not ready:
+                continue
+            try:
+                raw = os.read(self._fd, 1)
+            except OSError:
+                return None
+            if not raw:
+                return None
+            b = raw[0]
+            if b in (0x0d, 0x0a):
+                sys.stdout.write("\n")
+                sys.stdout.flush()
+                break
+            if b == 0x03:
+                raise KeyboardInterrupt
+            if b == 0x1b:
+                sys.stdout.write("\n")
+                sys.stdout.flush()
+                return None
+            if b in (0x7f, 0x08):
+                if buf:
+                    removed = buf.pop()
+                    width = max(1, cell_len(removed))
+                    sys.stdout.write("\b \b" * width)
+                    sys.stdout.flush()
+                continue
+            pending.append(b)
+            try:
+                ch = pending.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                if exc.reason == "unexpected end of data":
+                    continue
+                ch = pending.decode("utf-8", "replace")
+            pending.clear()
+            buf.append(ch)
+            sys.stdout.write(ch)
+            sys.stdout.flush()
+        return "".join(buf)
+
+    def _draw(self):
+        """Отрисовать панель и строку подсказки.
+
+        Перезапись на месте (курсор в начало + очистка до конца экрана)
+        вместо полной очистки — устраняет мерцание.
+        """
+        sys.stdout.write("\x1b[H")
+        self.console.print(self._render())
+        self.console.print(self._hint())
+        sys.stdout.write("\x1b[J")
+        sys.stdout.flush()
+
+    def _hint(self):
+        """Строка подсказки по горячим клавишам."""
+        return ("[dim]c — чат · n — задача · t — задачи · f — файлы · "
+                "u — обновить · h — помощь · s — сохранить · q — выход[/dim]")
+
+    def _run_console(self):
+        """Консольный режим без TTY (fallback)."""
+        try:
+            while True:
+                self.console.clear()
+                self.console.print(self._render())
+                self.console.print(self._hint())
+                try:
+                    key = self.console.input(
+                        "[bold cyan]Команда: [/bold cyan]").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    break
+
+                if key in ("q", "quit", "exit"):
+                    break
+                if not key:
+                    continue
+
+                action, _ = self.HOTKEYS.get(key, (None, None))
+                if not action or action == "quit":
+                    continue
+
+                handler = getattr(self, f"_on_{action}", None)
+                if handler:
+                    handler()
+        finally:
             if self._tracer:
                 self._tracer.close()
 
@@ -150,81 +272,31 @@ class TUIApp:
 
     def _on_chat(self):
         """Отправка сообщения в чат и обработка через агента."""
-        stdscr = self.stdscr
-        curses.curs_set(1)
-
         try:
-            height, width = stdscr.getmaxyx()
-            input_height = min(4, (height - 3) // 2)
+            message = self._read_line("Сообщение: ")
+        except (EOFError, KeyboardInterrupt):
+            return
 
-            prompt = "Сообщение: "
-            stdscr.addstr(height - input_height - 1, 0, prompt.ljust(width))
-            stdscr.refresh()
+        if message is None or not message.strip():
+            return
 
-            msg_bytes = []
-            while True:
-                key = stdscr.getch()
-
-                if key == curses.KEY_ENTER or key in [10, 13]:
-                    break
-
-                elif key == 27:
-                    msg = "".join(msg_bytes)
-                    self.console.print(f"[yellow]Отменено: '{msg}'[/yellow]")
-                    return
-
-                elif key == curses.KEY_BACKSPACE or key == 127 or key == 8:
-                    if msg_bytes:
-                        msg_bytes.pop()
-                        stdscr.move(height - input_height, 0)
-                        stdscr.clrtoe()
-                        prompt = "Сообщение: "
-                        stdscr.addstr(height - input_height - 1, 0, prompt.ljust(width))
-                        stdscr.refresh()
-
-                elif key >= 32 and key < 127:
-                    msg_bytes.append(chr(key))
-                    cursor_x = stdscr.getyx()[1]
-                    stdscr.addch(height - input_height, cursor_x, chr(key))
-                    stdscr.refresh()
-
-            message = "".join(msg_bytes)
-            if not message.strip():
-                return
-
-        finally:
-            curses.curs_set(0)
-
-        # Добавляем сообщение пользователя в чат
         self.chat_history.append(("user", message))
 
-        # Фаза 2: если есть агент — обрабатываем через него
         if self._agent:
             self.status_messages.insert(
                 0, (datetime.now().strftime("%H:%M"),
                     "\U0001f914 Агент думает..."))
-
-            # Временно выходим из curses для вывода агента
-            curses.endwin()
-
             try:
-                result = self._agent.run_interactive(
+                self._agent.run_interactive(
                     message,
                     on_message=self.add_chat_message
                 )
             except Exception as e:
                 self.add_chat_message("system", f"\u274c Ошибка: {e}")
-            finally:
-                # Возвращаем curses
-                self.stdscr = curses.initscr()
-                curses.curs_set(0)
-                self.stdscr.timeout(100)
-
             self.status_messages.insert(
                 0, (datetime.now().strftime("%H:%M"),
                     "\u2705 Ответ получен"))
         else:
-            # Без агента — просто echo
             self.chat_history.append(("ai", f"Эхо: {message}"))
 
     def _on_toggle_tasks(self):
@@ -254,7 +326,12 @@ class TUIApp:
             "  s — Сохранить сессию",
             "  h — Эта помощь",
         ]
+        self.console.clear()
         self.console.print("\n".join(help_text))
+        try:
+            self._read_line("Нажмите Enter для возврата... ")
+        except (EOFError, KeyboardInterrupt):
+            pass
 
     def _on_save_session(self):
         """Сохранить сессию (2.4)."""

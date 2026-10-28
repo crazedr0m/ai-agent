@@ -36,7 +36,8 @@ class CasualAgent(BaseAgent):
     def __init__(self, model: str = "qwen2.5-coder:14b",
                  tracer=None, name: str = "casual_agent",
                  max_steps: int = 15):
-        super().__init__(name=name, max_steps=max_steps, model=model)
+        super().__init__(name=name, max_steps=max_steps, model=model,
+                         tracer=tracer)
         self.tracer = tracer
 
     def run(self, user_query: str = "") -> str:
@@ -49,13 +50,10 @@ class CasualAgent(BaseAgent):
 
         core.console.print(f"[green]🤖 CasualAgent: {user_query[:100]}...[/green]")
 
-        if self.tracer:
-            self.tracer.log_llm_call(system_prompt[:500], model=self.model)
-
         result = self.run_react(system_prompt, user_query)
 
         if self.tracer:
-            self.tracer.log_final(result[:500])
+            self.tracer.log_final(result)
 
         return result
 
@@ -71,13 +69,10 @@ class CasualAgent(BaseAgent):
         if on_message:
             on_message("system", "🤔 Думаю...")
 
-        if self.tracer:
-            self.tracer.log_llm_call(system_prompt[:500], model=self.model)
-
         result = self.run_react(system_prompt, user_query)
 
         if self.tracer:
-            self.tracer.log_final(result[:500])
+            self.tracer.log_final(result)
 
         if on_message:
             on_message("ai", result)

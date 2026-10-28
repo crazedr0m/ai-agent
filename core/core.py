@@ -41,10 +41,19 @@ class ReActEngine:
 
     def __init__(self, tool_registry: Optional[ToolRegistry] = None,
                  max_steps: int = 10,
-                 model: str = "qwen2.5-coder:14b"):
+                 model: str = "qwen2.5-coder:14b",
+                 tracer=None):
         self.tool_registry = tool_registry or _GLOBAL_REGISTRY
         self.max_steps = max_steps
         self.model = model
+        self.tracer = tracer
+
+    def _log(self, step_type: str, content: str, metadata: dict = None):
+        """Записать шаг в трейс, если tracer подключён."""
+        if not self.tracer:
+            return
+        from modules.tracer import StepTrace
+        self.tracer.log_step(StepTrace(step_type, content, metadata or {}))
 
     def execute(self, system_prompt: str, user_prompt: str) -> str:
         """Запускает ReAct-цикл. Возвращает финальный ответ модели.
@@ -52,19 +61,25 @@ class ReActEngine:
         Фаза 1.5: Repair-цикл — невалидный вызов (неверные аргументы,
         отсутствующие обязательные параметры) возвращается модели
         с точным описанием ошибки для исправления. До 2 retry на шаг.
+
+        История диалога накапливается: каждый шаг видит исходную задачу
+        и все предыдущие наблюдения.
         """
-        current_user = user_prompt
+        history = [user_prompt]
         step = 0
 
         while step < self.max_steps:
             step += 1
             console.print(f"[dim]🤖 ReAct шаг {step}/{self.max_steps}...[/dim]")
 
+            current_user = "\n\n".join(history)
             raw = _root_core.call_ollama(system_prompt, current_user,
                                          model_override=self.model)
             if not raw:
                 console.print("[red]❌ Пустой ответ от LLM.[/red]")
                 return ""
+
+            self._log("llm_call", raw, {"model": self.model, "step": step})
 
             has_call, result = self.execute_tool_call(raw)
 
@@ -78,7 +93,7 @@ class ReActEngine:
             result_text = result.strip()
             if result_text.startswith("<tool_result"):
                 # Успешный вызов — передаём результат обратно модели
-                current_user = (
+                history.append(
                     f"Результат выполнения инструмента:\n{result}\n"
                     "Продолжай выполнение."
                 )
@@ -103,9 +118,13 @@ class ReActEngine:
                 if not raw2:
                     break
 
+                self._log("llm_call", raw2,
+                          {"model": self.model, "step": step,
+                           "repair_attempt": repair_attempt + 1})
+
                 has_call2, result2 = self.execute_tool_call(raw2)
                 if has_call2 and result2.strip().startswith("<tool_result"):
-                    current_user = (
+                    history.append(
                         f"Результат выполнения инструмента:\n{result2}\n"
                         "Продолжай выполнение."
                     )
@@ -117,7 +136,7 @@ class ReActEngine:
                 continue
 
             # Repair не удался — отдаём ошибку модели и продолжаем
-            current_user = (
+            history.append(
                 f"Не удалось выполнить вызов. Ошибка: {result_text}\n"
                 "Продолжай выполнение без этого инструмента."
             )
@@ -141,6 +160,10 @@ class ReActEngine:
 
         tool_func = self.tool_registry.get(tool_name)
         if not tool_func:
+            self._log("tool_call", parsed_args,
+                      {"tool_name": tool_name, "args": parsed_args})
+            self._log("tool_result", f"Инструмент '{tool_name}' не зарегистрирован",
+                      {"tool_name": tool_name, "error": True})
             return True, (f"Ошибка: Инструмент '{tool_name}' "
                           f"не зарегистрирован в реестре.")
 
@@ -151,15 +174,25 @@ class ReActEngine:
         console.print(f"[bold cyan]🔧 Вызов инструмента: "
                       f"{tool_name}({kwargs})[/bold cyan]")
 
-        if not is_valid and kwargs:
-            # Парсинг удался частично — используем что смогли
-            pass
+        self._log("tool_call", parsed_args,
+                  {"tool_name": tool_name, "args": parsed_args,
+                   "kwargs": kwargs})
+
+        if not is_valid:
+            # Невалидные аргументы — возвращаем ошибку, чтобы сработал repair
+            self._log("tool_result", error,
+                      {"tool_name": tool_name, "error": True})
+            return True, f"Ошибка вызова '{tool_name}': {error}"
 
         try:
             result = tool_func(**kwargs)
 
+            self._log("tool_result", str(result),
+                      {"tool_name": tool_name})
             return True, f"\n<tool_result name=\"{tool_name}\">\n{result}\n</tool_result>\n"
         except Exception as e:
+            self._log("tool_result", str(e),
+                      {"tool_name": tool_name, "error": True})
             return True, f"Системный сбой при выполнении инструмента: {e}"
 
 
@@ -187,10 +220,12 @@ class BaseAgent(ABC):
     def __init__(self, name: str = "base_agent",
                  tool_registry: Optional[ToolRegistry] = None,
                  max_steps: int = 10,
-                 model: str = "qwen2.5-coder:14b"):
+                 model: str = "qwen2.5-coder:14b",
+                 tracer=None):
         self.name = name
         self.tool_registry = tool_registry or _GLOBAL_REGISTRY
-        self.engine = ReActEngine(self.tool_registry, max_steps, model)
+        self.tracer = tracer
+        self.engine = ReActEngine(self.tool_registry, max_steps, model, tracer)
         self.model = model
 
     @abstractmethod
@@ -212,3 +247,4 @@ class BaseAgent(ABC):
 
     def run_react(self, system_prompt: str, user_prompt: str) -> str:
         """Запустить ReAct-цикл и вернуть финальный ответ."""
+        return self.engine.execute(system_prompt, user_prompt)

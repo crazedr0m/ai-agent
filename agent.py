@@ -24,13 +24,21 @@ from core import BaseAgent
 # Регистрируем все инструменты (включая dev_tools из Фазы 2)
 import core_tools  # noqa: F401
 
-# Подключаем MCP-серверы (Фаза 3)
-from modules.mcp_client import connect_mcp_servers
-_ = connect_mcp_servers()  # noqa: регистрирует MCP-инструменты
+
+def _connect_mcp():
+    """Подключить MCP-серверы и зарегистрировать их инструменты."""
+    from modules.mcp_client import connect_mcp_servers
+    core.console.print("[dim]⏳ Подключение MCP-серверов...[/dim]")
+    count = connect_mcp_servers()
+    core.console.print(f"[dim]✅ MCP: {count} инструментов[/dim]")
+    return count
 
 
 def cmd_chat(args: argparse.Namespace):
     """Запустить TUI-чат с CasualAgent."""
+    # Подключаем MCP-серверы
+    _connect_mcp()
+
     from modules.tui.app import TUIApp
 
     model = args.model or "qwen2.5-coder:14b"
@@ -63,6 +71,9 @@ def cmd_chat(args: argparse.Namespace):
 
 def cmd_migrate(args: argparse.Namespace):
     """Запустить конвейер миграции."""
+    # Подключаем MCP-серверы
+    _connect_mcp()
+
     from agents.migration_agent import MigrationAgent
 
     core.console.print("[bold green]🚀 Режим миграции[/bold green]")
@@ -157,6 +168,7 @@ def _print_trace_record(record: dict):
 def cmd_tools(args: argparse.Namespace):
     """Показать список зарегистрированных инструментов."""
     import core_tools  # регистрирует инструменты
+    _connect_mcp()  # регистрирует MCP-инструменты
 
     core.console.print("[bold cyan]🔧 Зарегистрированные инструменты:[/bold cyan]")
     tools_help = core._GLOBAL_REGISTRY.list_tools()

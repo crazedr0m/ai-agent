@@ -27,7 +27,7 @@ class Renderer:
             for task_id, task in sorted(tasks.items()):
                 status_icon = {
                     "pending": "[yellow]\u23f3[/yellow]",
-                    "running": "[bold green]\u25b6\ufe0f[/bold green]",
+                    "running": "[bold green]\u25b6[/bold green]",
                     "completed": "[green]\u2705[/green]",
                     "failed": "[red]\u274c[/red]",
                     "retrying": "[orange]\U0001f504[/orange]",
@@ -105,7 +105,7 @@ class Renderer:
             elif role == "ai":
                 prefix = "[red][bold]<[/bold][/red] AI-Агент"
             else:
-                prefix = "[dim]\u2699\ufe0f Система[/dim]"
+                prefix = "[dim]\u2699 Система[/dim]"
             lines.append(f"{prefix}\n{content}")
 
         return "\n\n".join(lines)

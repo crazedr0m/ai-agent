@@ -57,6 +57,9 @@ def _func_to_schema(func: Callable) -> dict:
     for name, param in sig.parameters.items():
         if name == "return":
             continue
+        if param.kind in (inspect.Parameter.VAR_KEYWORD,
+                          inspect.Parameter.VAR_POSITIONAL):
+            continue
         annotation = hints.get(name, str)
         schema_entry = _type_to_schema(annotation)
         if param.default is inspect.Parameter.empty:
@@ -206,17 +209,19 @@ class ToolRegistry:
         self._tools: dict[str, dict] = {}
 
     def register(self, name: str, description: str = "",
-                 func: Optional[Callable] = None) -> Callable:
+                 func: Optional[Callable] = None,
+                 parameters: Optional[dict] = None) -> Callable:
         """Регистрирует инструмент. Работает и как декоратор, и как вызов.
 
-        JSON Schema генерируется автоматически из type hints функции.
+        JSON Schema генерируется автоматически из type hints функции,
+        если явная схема (parameters) не передана.
         """
         def _register(f):
-            parameters = _func_to_schema(f)
+            schema = parameters if parameters is not None else _func_to_schema(f)
             self._tools[name] = {
                 "func": f,
                 "description": description,
-                "parameters": parameters,
+                "parameters": schema,
             }
             return f
 
@@ -296,14 +301,17 @@ class ToolRegistry:
 _GLOBAL_REGISTRY = ToolRegistry()
 
 
-def register_tool(name: str, description: str = ""):
+def register_tool(name: str, description: str = "",
+                  parameters: Optional[dict] = None):
     """Декоратор для регистрации инструментов в глобальном реестре.
 
     Пример:
         @register_tool("list_dir", "Показать содержимое папки")
         def list_dir(path: str) -> str: ...
+
+    parameters: явная JSON Schema (приоритетнее автогенерации из type hints).
     """
-    return _GLOBAL_REGISTRY.register(name, description)
+    return _GLOBAL_REGISTRY.register(name, description, parameters=parameters)
 
 
 def get_tool(name: str) -> Optional[Callable]:

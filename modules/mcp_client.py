@@ -55,6 +55,17 @@ _MCP_TOOL_REGISTRY: dict[str, tuple[Any, str]] = {}
 # ═══════════════════════════════════════════════════════════════════
 
 
+def _resolve_command(command: Optional[str]) -> Optional[str]:
+    """Подставляет интерпретатор текущего venv вместо голого 'python'."""
+    if command not in ("python", "python3"):
+        return command
+    candidate = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "venv", "bin", "python")
+    if os.path.exists(candidate):
+        return candidate
+    return sys.executable or command
+
+
 class MCPServerConfig:
     """Конфигурация одного MCP-сервера."""
 
@@ -63,10 +74,17 @@ class MCPServerConfig:
         self.transport = config.get("transport", "stdio")
         self.command = config.get("command")
         self.args = config.get("args", [])
-        self.env = config.get("env", {})
+        self._env = config.get("env", {})
         self.url = config.get("url")
         self.timeout = config.get("timeout", 30)
         self.description = config.get("description", "")
+
+    @property
+    def env(self):
+        """Окружение для дочернего процесса — родительский env + переопределения."""
+        merged = dict(os.environ)
+        merged.update(self._env)
+        return merged
 
     @property
     def tool_prefix(self) -> str:
@@ -92,12 +110,20 @@ def _format_mcp_result(result) -> str:
     return str(result)
 
 
+class MCPToolError(RuntimeError):
+    """Ошибка вызова MCP-инструмента (отличима от успешного результата)."""
+
+
 async def _call_mcp_tool_async(
     server: MCPServerConfig,
     tool_name: str,
     arguments: dict,
 ) -> str:
-    """Асинхронный вызов MCP-инструмента."""
+    """Асинхронный вызов MCP-инструмента.
+
+    При сбое поднимает MCPToolError, чтобы ReAct-цикл мог запустить repair,
+    а не принимать ошибку за успешный результат.
+    """
     from mcp import Client
 
     try:
@@ -115,7 +141,8 @@ async def _call_mcp_tool_async(
         elif server.transport == "sse":
             from mcp.client.sse import sse_client
             if not server.url:
-                return f"MCP error: SSE transport requires 'url' for '{server.name}'"
+                raise MCPToolError(
+                    f"SSE transport requires 'url' for '{server.name}'")
             transport = sse_client(server.url)
             async with Client(transport) as client:
                 result = await client.call_tool(tool_name, arguments)
@@ -124,18 +151,21 @@ async def _call_mcp_tool_async(
         elif server.transport == "streamable_http":
             from mcp.client.streamable_http import streamable_http_client
             if not server.url:
-                return f"MCP error: streamable_http transport requires 'url' for '{server.name}'"
+                raise MCPToolError(
+                    f"streamable_http transport requires 'url' for '{server.name}'")
             transport = streamable_http_client(server.url)
             async with Client(transport) as client:
                 result = await client.call_tool(tool_name, arguments)
                 return _format_mcp_result(result)
 
         else:
-            return f"MCP error: unknown transport '{server.transport}'"
+            raise MCPToolError(f"unknown transport '{server.transport}'")
 
+    except MCPToolError:
+        raise
     except Exception as e:
         logger.exception(f"MCP call failed: {server.name}/{tool_name}")
-        return f"MCP error: {e}"
+        raise MCPToolError(f"{server.name}/{tool_name}: {e}") from e
 
 
 def _call_mcp_tool_sync(server: MCPServerConfig, tool_name: str, arguments: dict) -> str:
@@ -153,11 +183,16 @@ def _register_mcp_tool(
     server: MCPServerConfig,
     mcp_tool_name: str,
     description: str,
+    parameters: Optional[dict] = None,
 ):
-    """Создать и зарегистрировать синхронную обёртку для MCP-инструмента."""
+    """Создать и зарегистрировать синхронную обёртку для MCP-инструмента.
+
+    parameters: JSON Schema инструмента из MCP-сервера (inputSchema).
+    Если не передана — схема генерируется из type hints обёртки.
+    """
     _MCP_TOOL_REGISTRY[full_name] = (server, mcp_tool_name)
 
-    @register_tool(full_name, description)
+    @register_tool(full_name, description, parameters=parameters)
     def _wrapper(**kwargs: Any) -> str:
         """MCP tool wrapper — calls the remote server."""
         cfg, name = _MCP_TOOL_REGISTRY[full_name]
@@ -219,18 +254,22 @@ class MCPManager:
         return _run_async(self._connect_all(servers))
 
     async def _connect_all(self, servers: list[MCPServerConfig]) -> int:
-        """Подключиться ко всем серверам асинхронно."""
+        """Подключиться ко всем серверам параллельно."""
+        results = await asyncio.gather(
+            *(self._connect_server(s) for s in servers),
+            return_exceptions=True,
+        )
+
         total = 0
-        for server in servers:
-            try:
-                count = await self._connect_server(server)
-                total += count
-                logger.info(
-                    "MCP server '%s': %d tools registered via %s",
-                    server.name, count, server.transport,
-                )
-            except Exception as e:
-                logger.error("MCP server '%s' failed: %s", server.name, e)
+        for server, result in zip(servers, results):
+            if isinstance(result, BaseException):
+                logger.error("MCP server '%s' failed: %s", server.name, result)
+                continue
+            total += result
+            logger.info(
+                "MCP server '%s': %d tools registered via %s",
+                server.name, result, server.transport,
+            )
         return total
 
     async def _connect_server(self, server: MCPServerConfig) -> int:
@@ -240,7 +279,7 @@ class MCPManager:
         if server.transport == "stdio":
             from mcp.client.stdio import StdioServerParameters
             params = StdioServerParameters(
-                command=server.command,
+                command=_resolve_command(server.command),
                 args=server.args,
                 env=server.env if server.env else None,
             )
@@ -279,11 +318,15 @@ class MCPManager:
             full_name = f"{prefix}{mcp_tool_name}"
             description = tool.description or f"MCP tool from {server.name}"
 
+            schema = (getattr(tool, "input_schema", None)
+                      or getattr(tool, "inputSchema", None))
+
             _register_mcp_tool(
                 full_name=full_name,
                 server=server,
                 mcp_tool_name=mcp_tool_name,
                 description=f"[MCP:{server.name}] {description}",
+                parameters=schema,
             )
             count += 1
 

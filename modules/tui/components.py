@@ -15,7 +15,7 @@ def get_file_icon(filename: str) -> str:
     if filename.endswith(".py"):
         return "[blue]📝[/blue]"
     elif filename.endswith(".json"):
-        return "[magenta]⚙️[/magenta]"
+        return "[magenta]⚙[/magenta]"
     else:
         return "[yellow]📄[/yellow]"
 
