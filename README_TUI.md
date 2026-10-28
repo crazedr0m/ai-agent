@@ -9,10 +9,10 @@
 ## 📦 Установка
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
-**Зависимости:**
+**Зависимости** объявлены в [`pyproject.toml`](pyproject.toml):
 - `requests` — вызовы Ollama API
 - `rich>=13.0.0` — TUI рендеринг
 - `python-dotenv` — загрузка `.env`

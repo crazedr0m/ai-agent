@@ -19,7 +19,7 @@ class TestLoadPrompt(unittest.TestCase):
         mock_file.return_value.read.side_effect = [
             json.dumps({"test_key": {"prompt": "hello world"}})
         ]
-        import _core
+        from core import runtime as _core
         result = _core.load_prompt("test_key")
         self.assertEqual(result, "hello world")
 
@@ -29,7 +29,7 @@ class TestLoadPrompt(unittest.TestCase):
             json.dumps({"test_key": {"file_path": "prompts/test.txt"}}),
             "content from file",
         ]
-        import _core
+        from core import runtime as _core
         result = _core.load_prompt("test_key")
         self.assertEqual(result, "content from file")
 
@@ -39,7 +39,7 @@ class TestLoadPrompt(unittest.TestCase):
             json.dumps({"k": {"file_path": "prompts/test.txt"}}),
             "file content",
         ]
-        import _core
+        from core import runtime as _core
         _core.load_prompt("k")
         self.assertEqual(mock_file.call_count, 2)
 
@@ -53,7 +53,7 @@ class TestLoadPromptFromFile(unittest.TestCase):
             json.dumps({"k": {"file_path": "prompts/myprompt.txt"}}),
             "from file",
         ]
-        import _core
+        from core import runtime as _core
         result = _core.load_prompt_from_file("k")
         self.assertEqual(result, "from file")
 
@@ -62,7 +62,7 @@ class TestLoadPromptFromFile(unittest.TestCase):
         mock_file.return_value.read.side_effect = [
             json.dumps({"k": {"prompt": "inline text"}})
         ]
-        import _core
+        from core import runtime as _core
         result = _core.load_prompt_from_file("k")
         self.assertEqual(result, "inline text")
 
@@ -75,8 +75,8 @@ class TestUpdatePromptFile(unittest.TestCase):
         mock_file.return_value.read.side_effect = [
             json.dumps({"k": {"prompt": "old", "mutability": "immutable"}})
         ]
-        with patch("_core.console") as mock_console:
-            import _core
+        with patch("core.runtime.console") as mock_console:
+            from core import runtime as _core
             result = _core.update_prompt_file("k", "new text")
         self.assertFalse(result)
         mock_console.print.assert_called_once()
@@ -86,8 +86,8 @@ class TestUpdatePromptFile(unittest.TestCase):
         mock_file.return_value.read.side_effect = [
             json.dumps({"k": {"file_path": "prompts/test.txt", "mutability": "user_approved"}})
         ]
-        with patch("_core.console"):
-            import _core
+        with patch("core.runtime.console"):
+            from core import runtime as _core
             result = _core.update_prompt_file("k", "new content")
 
         self.assertTrue(result)
@@ -100,8 +100,8 @@ class TestUpdatePromptFile(unittest.TestCase):
         mock_file.return_value.read.side_effect = [
             json.dumps({"k": {"prompt": "old", "mutability": "user_approved"}})
         ]
-        with patch("_core.console"):
-            import _core
+        with patch("core.runtime.console"):
+            from core import runtime as _core
             result = _core.update_prompt_file("k", "new inline text")
 
         self.assertTrue(result)
@@ -117,8 +117,8 @@ class TestUpdatePromptInFile(unittest.TestCase):
         mock_file.return_value.read.side_effect = [
             json.dumps({"k": {"prompt": "old", "mutability": "immutable"}})
         ]
-        with patch("_core.console"):
-            import _core
+        with patch("core.runtime.console"):
+            from core import runtime as _core
             result = _core.update_prompt_in_file("k", "new")
         self.assertFalse(result)
 
@@ -127,8 +127,8 @@ class TestUpdatePromptInFile(unittest.TestCase):
         mock_file.return_value.read.side_effect = [
             json.dumps({"k": {"file_path": "prompts/test.txt", "mutability": "autonomous"}})
         ]
-        with patch("_core.console"):
-            import _core
+        with patch("core.runtime.console"):
+            from core import runtime as _core
             result = _core.update_prompt_in_file("k", "new content")
         self.assertTrue(result)
 
@@ -137,8 +137,8 @@ class TestUpdatePromptInFile(unittest.TestCase):
         mock_file.return_value.read.side_effect = [
             json.dumps({"k": {"prompt": "old", "mutability": "autonomous"}})
         ]
-        with patch("_core.console"):
-            import _core
+        with patch("core.runtime.console"):
+            from core import runtime as _core
             result = _core.update_prompt_in_file("k", "new content")
         self.assertTrue(result)
         write_call = [c for c in mock_file.call_args_list if c[0][1] == 'w'][0]
@@ -150,7 +150,7 @@ class TestCallOllama(unittest.TestCase):
 
     @patch("modules.llm.call_chat", return_value="model response")
     def test_call_ollama_delegates_to_call_chat(self, mock_call_chat):
-        import _core
+        from core import runtime as _core
         result = _core.call_ollama("sys", "user")
         self.assertEqual(result, "model response")
         mock_call_chat.assert_called_once_with(
@@ -161,7 +161,7 @@ class TestCallOllama(unittest.TestCase):
 
     @patch("modules.llm.call_chat", return_value="custom model response")
     def test_call_ollama_with_model_override(self, mock_call_chat):
-        import _core
+        from core import runtime as _core
         result = _core.call_ollama("sys", "user", model_override="deepseek-r1:32b")
         self.assertEqual(result, "custom model response")
         mock_call_chat.assert_called_once_with(
@@ -180,8 +180,8 @@ class TestRunIsolatedTests(unittest.TestCase):
         mock_result.returncode = 0
         mock_subprocess.return_value = mock_result
 
-        with patch("_core.console"):
-            import _core
+        with patch("core.runtime.console"):
+            from core import runtime as _core
             success, message = _core.run_isolated_tests("test_abc.py")
 
         self.assertTrue(success)
@@ -195,8 +195,8 @@ class TestRunIsolatedTests(unittest.TestCase):
         mock_result.stdout = "some output"
         mock_subprocess.return_value = mock_result
 
-        with patch("_core.console"):
-            import _core
+        with patch("core.runtime.console"):
+            from core import runtime as _core
             success, message = _core.run_isolated_tests("test_abc.py")
 
         self.assertFalse(success)
@@ -210,8 +210,8 @@ class TestRunIsolatedTests(unittest.TestCase):
         mock_result.stdout = "some output"
         mock_subprocess.return_value = mock_result
 
-        with patch("_core.console"):
-            import _core
+        with patch("core.runtime.console"):
+            from core import runtime as _core
             success, message = _core.run_isolated_tests("test_abc.py")
 
         self.assertFalse(success)
@@ -219,8 +219,8 @@ class TestRunIsolatedTests(unittest.TestCase):
 
     @patch("subprocess.run")
     def test_uses_sys_executable(self, mock_subprocess):
-        with patch("_core.console"):
-            import _core
+        with patch("core.runtime.console"):
+            from core import runtime as _core
             _core.run_isolated_tests("test_xyz.py")
         args, kwargs = mock_subprocess.call_args
         self.assertIn(sys.executable, args[0])
@@ -236,8 +236,8 @@ class TestHotReload(unittest.TestCase):
             "modules.permissions": True,
         }
 
-        with patch("_core.console"):
-            import _core
+        with patch("core.runtime.console"):
+            from core import runtime as _core
             _core.hot_reload()
 
         mock_reload_autonomous.assert_called_once()
@@ -250,8 +250,8 @@ class TestHotReload(unittest.TestCase):
         }
 
         mock_console = MagicMock()
-        with patch("_core.console", mock_console):
-            import _core
+        with patch("core.runtime.console", mock_console):
+            from core import runtime as _core
             _core.hot_reload()
 
         print_calls = mock_console.print.call_args_list

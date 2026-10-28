@@ -20,6 +20,7 @@ from datetime import datetime
 
 import core
 from core import BaseAgent
+from modules.settings import settings
 
 # Регистрируем все инструменты (включая dev_tools из Фазы 2)
 import core_tools  # noqa: F401
@@ -41,7 +42,7 @@ def cmd_chat(args: argparse.Namespace):
 
     from modules.tui.app import TUIApp
 
-    model = args.model or "qwen2.5-coder:14b"
+    model = args.model or settings.model_coder
     session_id = args.session
 
     core.console.print(f"[bold green]💬 Чат-режим (модель: {model})[/bold green]")

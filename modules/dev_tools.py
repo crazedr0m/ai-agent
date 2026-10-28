@@ -21,6 +21,37 @@ from typing import Optional
 
 from core.core_tools import register_tool
 from modules.permissions import confirm_action
+from modules.zones import describe_zone, zone_of
+
+
+def _authorize_write(file_path: str, action: str) -> Optional[str]:
+    """Проверить зону мутабельности и запросить подтверждение (ADR-001).
+
+    Возвращает текст отказа или None, если операцию можно выполнять.
+    """
+    zone = zone_of(file_path)
+
+    if zone == "kernel":
+        return (
+            f"❌ Запрещено: {file_path} в зоне kernel "
+            f"({describe_zone(zone)}). Правки возможны только человеком."
+        )
+
+    if zone == "supervised":
+        if not confirm_action(
+            f"{action} в зоне supervised: {file_path}",
+            category="dangerous",
+        ):
+            return "❌ Операция отклонена пользователем"
+        return None
+
+    if zone == "autonomous":
+        return None
+
+    if not confirm_action(f"{action}: {file_path}"):
+        return "❌ Операция отклонена пользователем"
+
+    return None
 
 
 # ──────────────────────────────────────────────
@@ -63,8 +94,9 @@ def write_file(file_path: str, content: str) -> str:
         file_path: путь к файлу
         content: новое содержимое файла
     """
-    if not confirm_action(f"Запись файла: {file_path} ({len(content)} символов)"):
-        return "❌ Операция отклонена пользователем"
+    denial = _authorize_write(file_path, "Запись файла")
+    if denial:
+        return denial
 
     try:
         os.makedirs(os.path.dirname(os.path.abspath(file_path)), exist_ok=True)
@@ -84,8 +116,9 @@ def apply_diff(file_path: str, old_string: str, new_string: str) -> str:
         old_string: строка для замены (должна точно совпадать)
         new_string: новая строка
     """
-    if not confirm_action(f"Изменение файла: {file_path}"):
-        return "❌ Операция отклонена пользователем"
+    denial = _authorize_write(file_path, "Изменение файла")
+    if denial:
+        return denial
 
     try:
         with open(file_path, "r", encoding="utf-8") as f:

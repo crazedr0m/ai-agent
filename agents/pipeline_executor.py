@@ -13,6 +13,7 @@ import core
 from core import BaseAgent
 from modules.parser import extract_code_from_markdown
 from modules.sandbox import Sandbox
+from modules.settings import settings
 
 MAX_FIX_ATTEMPTS = 3
 
@@ -41,16 +42,16 @@ class PipelineExecutor:
     def __init__(self, agent: BaseAgent, *,
                  checkpoint=None, memory=None, tracer=None, repo_map=None,
                  shared_context_path: str = "shared_context.json",
-                 model_architect: str = "qwen3-coder:30b",
-                 model_coder: str = "qwen2.5-coder:14b"):
+                 model_architect: str = None,
+                 model_coder: str = None):
         self.agent = agent
         self.checkpoint = checkpoint
         self.memory = memory
         self.tracer = tracer
         self.repo_map = repo_map
         self.shared_context_path = shared_context_path
-        self.model_architect = model_architect
-        self.model_coder = model_coder
+        self.model_architect = model_architect or settings.model_architect
+        self.model_coder = model_coder or settings.model_coder
 
     # ─────────────────────────────────────────────
     # Публичный метод
@@ -216,7 +217,7 @@ class PipelineExecutor:
         )
         try:
             new_prompt = self.agent.call_llm(
-                meta_system, meta_user, model_override="deepseek-r1:32b"
+                meta_system, meta_user, model_override=settings.model_meta
             )
         except Exception as e:
             self._log_end(task_id, False, target_file,

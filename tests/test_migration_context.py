@@ -2,11 +2,8 @@
 # tests/test_migration_context.py — Тесты для modules/migration_context.py
 
 import os
-import sys
 import tempfile
 import unittest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from modules.migration_context import (
     CheckpointManager,

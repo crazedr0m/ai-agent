@@ -122,6 +122,10 @@ ai-agent/
 ------------------------------
 ## 7. Зависимости
 
-Только `requests` и `rich` (см. `requirements.txt`). Никаких дев-зависимостей (pytest, flake8, mypy и т.д.).
+Все зависимости объявлены в [`pyproject.toml`](pyproject.toml) (единый источник правды,
+`requirements.txt` удалён). Runtime: `requests`, `rich`, `python-dotenv`, `mcp`, `fastmcp`,
+`tree-sitter` (+ грамматики). Dev (`coverage`) — в `[project.optional-dependencies].dev`.
+Никаких дев-зависимостей в runtime-списке (pytest, flake8, mypy и т.д.).
+Проект ставится как пакет: `pip install -e .` (или `pip install -e ".[dev]"`).
 
 Тесты используют стандартный `unittest`, запускаются через `python test_*.py`.

@@ -19,10 +19,12 @@ from typing import Optional
 import requests
 from rich.console import Console
 
+from modules.settings import settings
+
 console = Console()
 
-DEFAULT_OLLAMA_URL = "http://192.168.5.7:11434"
-DEFAULT_MODEL = "qwen2.5-coder:14b"
+DEFAULT_OLLAMA_URL = settings.ollama_base_url
+DEFAULT_MODEL = settings.model_coder
 DEFAULT_TIMEOUT = 120  # секунд на один запрос
 MAX_RETRIES = 2
 RETRY_DELAY = 2.0  # секунд между retry

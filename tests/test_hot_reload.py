@@ -46,7 +46,7 @@ class TestGetZoneForFile(unittest.TestCase):
 
     def test_supervised_core(self):
         from modules.hot_reload import get_zone_for_file
-        self.assertEqual(get_zone_for_file("_core.py"), "supervised")
+        self.assertEqual(get_zone_for_file("core/runtime.py"), "supervised")
 
     def test_supervised_core_path(self):
         from modules.hot_reload import get_zone_for_file

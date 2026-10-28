@@ -2,12 +2,8 @@
 """Пример запуска TUI приложения."""
 
 import os
-import sys
 import json
 from datetime import datetime
-
-# Добавляем родительскую директорию в path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.tui.app import TUIApp
 

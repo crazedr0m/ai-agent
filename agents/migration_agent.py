@@ -16,6 +16,7 @@ import asyncio
 import core
 from core import BaseAgent
 from modules.parser import extract_code_from_markdown
+from modules.settings import settings
 from modules.tracer import TraceSession
 from modules.repo_map import build_repo_map, format_repo_map_for_llm
 from modules.dependency_planner import DependencyPlanner
@@ -42,11 +43,13 @@ class MigrationAgent(BaseAgent):
     """
 
     def __init__(self, manifest_path: str = "migration_manifest.json",
-                 model_architect: str = "qwen3-coder:30b",
-                 model_coder: str = "qwen2.5-coder:14b",
+                 model_architect: str = None,
+                 model_coder: str = None,
                  tracer: TraceSession = None):
+        model_architect = model_architect or settings.model_architect
+        model_coder = model_coder or settings.model_coder
         super().__init__(name="migration_agent", max_steps=10,
-                         model="qwen2.5-coder:14b")
+                         model=model_coder)
         self.manifest_path = manifest_path
         self.model_architect = model_architect
         self.model_coder = model_coder

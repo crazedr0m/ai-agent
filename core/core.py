@@ -1,20 +1,16 @@
 # -*- coding: utf-8 -*-
 # core/core.py — BaseAgent(ABC) + ReActEngine
 #
-# Импортирует _core.py (бывший core.py) напрямую, минуя пакет.
+# Импортирует функции ядра из core/runtime.py (бывший _core.py).
 # Импортирует ToolRegistry + register_tool из core/core_tools.py.
 
-import importlib.util
-import os
 import re
 from abc import ABC, abstractmethod
 from typing import Optional
 
-# Загружаем _core.py напрямую (он IMMUTABLE, все функции core)
-_core_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "_core.py")
-_spec = importlib.util.spec_from_file_location("_root_core", _core_path)
-_root_core = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_root_core)
+# Единая загрузка ядра: core.runtime — единственный источник функций ядра.
+# Имя _root_core сохраняется для совместимости (тесты патчат core.core._root_core).
+from . import runtime as _root_core
 
 from .core_tools import ToolRegistry, register_tool, get_tool, _GLOBAL_REGISTRY
 

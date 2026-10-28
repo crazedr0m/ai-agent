@@ -8,14 +8,16 @@
 
 | Требование | Значение |
 |------------|----------|
-| Python | 3.11+ (рекомендуется 3.11, как в `Dockerfile`) |
-| Ollama | запущенный локально, ответы на `OLLAMA_URL` |
+| Python | 3.10+ (рекомендуется 3.11, как в `Dockerfile`) |
+| Ollama | запущенный локально, ответы на `OLLAMA_BASE_URL` |
 | OS | Linux / macOS / Windows |
-Зависимости проекта объявлены в [`requirements.txt`](requirements.txt):
+Зависимости проекта объявлены в [`pyproject.toml`](pyproject.toml):
 
 - `requests` — вызовы Ollama API
 - `rich>=13.0.0` — терминальный вывод и TUI
 - `python-dotenv` — загрузка переменных из `.env`
+- `mcp`, `fastmcp` — MCP-клиент и MCP-серверы
+- `tree-sitter` (+ грамматики `python`/`php`/`javascript`/`typescript`/`go`) — анализ кода
 
 
 ---
@@ -40,13 +42,20 @@ venv\Scripts\activate
 
 ---
 
-## 2️⃣ Установка зависимостей
+## 2️⃣ Установка проекта и зависимостей
 
-Внутри активированного окружения:
+Проект оформлен как пакет ([`pyproject.toml`](pyproject.toml)). Устанавливаем его в
+редактируемом режиме вместе с зависимостями:
 
 ```bash
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install -e .
+```
+
+Для разработки (тесты с покрытием):
+
+```bash
+pip install -e ".[dev]"
 ```
 
 Проверка установки:
@@ -70,15 +79,21 @@ pip list
 2. Отредактируйте `.env` под своё окружение:
 
    ```ini
-   OLLAMA_URL=http://192.168.5.7:11434/api/generate
-   ANALYZER_MODEL=qwen2.5-coder:14b
+   OLLAMA_BASE_URL=http://192.168.5.7:11434
    ARCHITECT_MODEL=qwen3-coder:30b
+   CODER_MODEL=qwen2.5-coder:14b
+   META_MODEL=deepseek-r1:32b
+   TEST_TIMEOUT=300
+   MAX_CONCURRENCY=2
    TRACES_DIR=traces
    MAX_SESSIONS=20
    MCP_SERVER_URL=http://localhost:3000
    ```
 
-> ⚠️ **Важно про `OLLAMA_URL`.** Значение endpoint в настоящее время жёстко зашито в константу в [`_core.py`](_core.py). Если ваш Ollama живёт по другому адресу, `OLLAMA_URL` из `.env` может не применяться автоматически — сверьтесь с кодом перед изменением endpoint.
+> ℹ️ `OLLAMA_BASE_URL` указывается **без** пути `/api/...` — конкретный endpoint
+> (`/api/chat`) добавляет адаптер. Переменные читаются через
+> [`modules/settings.py`](modules/settings.py) (единый источник правды: там же
+> дефолты для URL и имён моделей).
 
 ---
 
@@ -176,6 +191,8 @@ docker run -it ai-agent
 
 ## ⚠️ Критических правил
 
-- [`core.py`](core.py), [`_core.py`](_core.py) и [`core_tools.py`](core_tools.py) — **IMMUTABLE**. Не изменять.
+- Зона **supervised** ([`core/core.py`](core/core.py), [`core/runtime.py`](core/runtime.py),
+  [`core/core_tools.py`](core/core_tools.py), [`core_tools.py`](core_tools.py)) — изменения
+  требуют подтверждения человека (y/n). См. [`ADR-001`](docs/adr/ADR-001-core-boundaries.md).
 - Папка `venv/` — **IMMUTABLE**.
 - Промпты живут в [`prompts/`](prompts/) (и в [`prompts.json`](prompts.json)) как внешние файлы — никаких промптов внутри кода.

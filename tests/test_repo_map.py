@@ -2,12 +2,8 @@
 # tests/test_repo_map.py — Тесты для modules/repo_map.py
 
 import os
-import sys
 import tempfile
 import unittest
-
-# Добавляем корень проекта в путь
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from modules.repo_map import build_repo_map, format_repo_map_for_llm, format_dependency_map
 

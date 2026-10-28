@@ -11,13 +11,7 @@ import sys
 from typing import Optional, Callable
 from datetime import datetime
 
-# Импорт из _core.py (IMMUTABLE)
-import importlib.util
-_core_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))), "_core.py")
-_spec = importlib.util.spec_from_file_location("_root_core", _core_path)
-_root_core = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_root_core)
+from core import runtime as _root_core
 
 console = _root_core.console
 

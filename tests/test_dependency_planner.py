@@ -1,11 +1,7 @@
 # -*- coding: utf-8 -*-
 # tests/test_dependency_planner.py — Тесты для modules/dependency_planner.py
 
-import os
-import sys
 import unittest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from modules.dependency_planner import DependencyPlanner, sort_tasks_by_dependencies
 

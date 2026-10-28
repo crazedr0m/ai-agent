@@ -8,6 +8,7 @@
 
 import core
 from core import BaseAgent
+from modules.settings import settings
 
 
 _SYSTEM_PROMPT_TEMPLATE = """Ты — полезный ассистент для работы с кодом.
@@ -33,10 +34,11 @@ class CasualAgent(BaseAgent):
     search_code, git_status, git_diff
     """
 
-    def __init__(self, model: str = "qwen2.5-coder:14b",
+    def __init__(self, model: str = None,
                  tracer=None, name: str = "casual_agent",
                  max_steps: int = 15):
-        super().__init__(name=name, max_steps=max_steps, model=model,
+        super().__init__(name=name, max_steps=max_steps,
+                         model=model or settings.model_coder,
                          tracer=tracer)
         self.tracer = tracer
 

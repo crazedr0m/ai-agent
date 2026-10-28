@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-agent"
+version = "1.0.0"
+description = "Autonomous AI Software Engineer — мультиагентная система миграции легаси-кода"
+requires-python = ">=3.10"
+dependencies = [
+    "requests",
+    "rich>=13.0.0",
+    "python-dotenv",
+    "mcp",
+    "fastmcp",
+    "tree-sitter",
+    "tree-sitter-python",
+    "tree-sitter-php",
+    "tree-sitter-javascript",
+    "tree-sitter-typescript",
+    "tree-sitter-go",
+]
+
+[project.optional-dependencies]
+dev = ["coverage>=7.6.0"]
+
+[project.scripts]
+agent = "agent:main"
+
+[tool.setuptools]
+py-modules = ["agent", "core_tools", "initializer"]
+
+[tool.setuptools.packages.find]
+include = ["core*", "agents*", "modules*", "mcp_servers*"]

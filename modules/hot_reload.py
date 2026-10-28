@@ -37,7 +37,7 @@ ZONE_MODULES: dict[str, list[str]] = {
         "modules.dev_tools",
     ],
     "supervised": [
-        "_core",
+        "core.runtime",
         "core",
         "core.core",
         "core.core_tools",
@@ -154,7 +154,7 @@ def _filepath_to_module(filepath: str) -> Optional[str]:
 
 
 def get_zone_for_file(filepath: str) -> Optional[str]:
-    """Определить зону мутабельности для файла.
+    """Определить зону мутабельности для файла (единый источник — modules.zones).
 
     Args:
         filepath: путь к файлу
@@ -162,26 +162,9 @@ def get_zone_for_file(filepath: str) -> Optional[str]:
     Returns:
         'kernel', 'supervised', 'autonomous' или None
     """
-    filepath = filepath.replace("\\", "/")
+    from modules.zones import zone_of
 
-    # Kernel — пока пусто
-    # Supervised
-    supervised_prefixes = ["_core.py", "core/", "core/core.py",
-                           "core/core_tools.py", "core/__init__.py"]
-    for prefix in supervised_prefixes:
-        if filepath.startswith(prefix) or filepath == prefix:
-            return "supervised"
-
-    # Autonomous
-    autonomous_prefixes = [
-        "core_tools.py", "agents/", "modules/", "prompts/",
-        "prompts.json", "mcp_server_", "mcp_servers/",
-    ]
-    for prefix in autonomous_prefixes:
-        if filepath.startswith(prefix) or filepath == prefix:
-            return "autonomous"
-
-    return None
+    return zone_of(filepath)
 
 
 def hot_reload_selfmod(file_paths: list[str]) -> dict[str, bool]:

@@ -1,28 +1,27 @@
 # -*- coding: utf-8 -*-
 # core/__init__.py
 #
-# Делает import core доступным: объединяет _core.py + core/core_tools + core/core
+# Делает import core доступным: объединяет core.runtime + core.core_tools + core.core
 # в единый модуль core. Все старые импорты import core продолжают работать.
 #
-# Важно: sys.modules['core'] остаётся пакетом, чтобы импорты внутри core/ работали.
-# Атрибуты из _core.py копируются в этот пакет.
+# Единая загрузка ядра: core.runtime — единственный модуль с функциями ядра.
+# Алиасы _core / _root_core в sys.modules сохраняют совместимость с hot_reload
+# и легаси-кодом.
 
-import importlib.util
 import sys
-import os
 
-# 1. Загружаем _core.py (бывший core.py) как отдельный модуль _root_core
-_core_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "_core.py")
-_spec = importlib.util.spec_from_file_location("_root_core", _core_path)
-_root_core = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_root_core)
-sys.modules['_root_core'] = _root_core  # регистрируем, чтобы не перегружался
+# 1. Единая загрузка ядра (единственное место, где живут функции ядра)
+from . import runtime as _root_core
 
-# 2. Импортируем новые компоненты (теперь core — это пакет, всё ОК)
+# 2. Алиасы для совместимости: hot_reload и легаси-импорты используют "_core"
+sys.modules.setdefault("_root_core", _root_core)
+sys.modules.setdefault("_core", _root_core)
+
+# 3. Импортируем новые компоненты (core — пакет, всё ОК)
 from .core_tools import ToolRegistry, register_tool, get_tool, _GLOBAL_REGISTRY
 from .core import BaseAgent, ReActEngine
 
-# 3. Копируем все публичные атрибуты из _root_core в текущий (пакетный) модуль
+# 4. Копируем публичные атрибуты из runtime в текущий (пакетный) модуль
 _this = sys.modules[__name__]
 for _attr_name in dir(_root_core):
     if not _attr_name.startswith('_'):
@@ -31,7 +30,7 @@ for _attr_name in dir(_root_core):
         except Exception:
             pass  # некоторые built-in атрибуты могут не ставиться
 
-# 4. Добавляем новые компоненты
+# 5. Добавляем новые компоненты
 _this.ToolRegistry = ToolRegistry
 _this.register_tool = register_tool
 _this.get_tool = get_tool

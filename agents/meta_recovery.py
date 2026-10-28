@@ -7,6 +7,7 @@
 import json
 import core
 from modules.parser import extract_code_from_markdown
+from modules.settings import settings
 
 
 class MetaRecovery:
@@ -59,7 +60,7 @@ class MetaRecovery:
         )
 
         diagnosis_raw = self.agent.call_llm(
-            meta_system, meta_user, model_override="deepseek-r1:32b"
+            meta_system, meta_user, model_override=settings.model_meta
         )
 
         try:
@@ -85,7 +86,7 @@ class MetaRecovery:
             return False
 
         if fix_type == "code" and target_file:
-            if target_file in ("core.py", "core_tools.py", "_core.py"):
+            if target_file in ("core.py", "core_tools.py", "core/runtime.py"):
                 core.console.print(f"[red]🚫 Заблокировано изменение {target_file}[/red]")
                 return False
             with open(target_file, "w", encoding="utf-8") as f:
